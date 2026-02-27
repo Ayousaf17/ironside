@@ -23,29 +23,50 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const result = await agent.invoke({
-    messages: [new HumanMessage(PULSE_CHECK_PROMPT)],
-  });
+  try {
+    const result = await agent.invoke({
+      messages: [new HumanMessage(PULSE_CHECK_PROMPT)],
+    });
 
-  const lastMessage = result.messages[result.messages.length - 1];
-  const summary =
-    typeof lastMessage.content === "string"
-      ? lastMessage.content
-      : JSON.stringify(lastMessage.content);
+    const lastMessage = result.messages[result.messages.length - 1];
+    const summary =
+      typeof lastMessage.content === "string"
+        ? lastMessage.content
+        : JSON.stringify(lastMessage.content);
 
-  // Send pulse check to Slack
-  await sendSlackMessage(summary);
+    // Send pulse check to Slack
+    await sendSlackMessage(summary);
 
-  // Log to pulse_checks table
-  await prisma.pulseCheck.create({
-    data: {
-      channel: "cron",
-      summary,
-      ticketCount: null,
-      insights: { source: "cron", prompt: PULSE_CHECK_PROMPT },
-      status: "completed",
-    },
-  });
+    // Log to pulse_checks table
+    await prisma.pulseCheck.create({
+      data: {
+        channel: "cron",
+        summary,
+        ticketCount: null,
+        insights: { source: "cron", prompt: PULSE_CHECK_PROMPT },
+        status: "completed",
+      },
+    });
 
-  return NextResponse.json({ ok: true, summary });
+    return NextResponse.json({ ok: true, summary });
+  } catch (error) {
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("[cron/pulse-check] Error:", errorMessage);
+
+    // Log error to performance_metrics
+    await prisma.performanceMetric.create({
+      data: {
+        metric: "cron_pulse_check_error",
+        value: 1,
+        unit: "count",
+        context: { error: errorMessage },
+      },
+    });
+
+    // Send error notification to Slack
+    await sendSlackMessage(`Pulse check cron failed: ${errorMessage}`);
+
+    return NextResponse.json({ ok: false, error: errorMessage }, { status: 500 });
+  }
 }
