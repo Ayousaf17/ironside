@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
+import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 
 const agent = createRouterAgent([sw3AnalyticsTool]);
@@ -27,6 +28,10 @@ export async function POST(request: NextRequest) {
   const responseText = typeof lastMessage.content === "string"
     ? lastMessage.content
     : JSON.stringify(lastMessage.content);
+
+  // Send response to Slack (replaces n8n "Send Slack Message" node)
+  const channel = body.event?.channel;
+  await sendSlackMessage(responseText, channel);
 
   // Log to api_logs (replaces n8n Supabase "Log to api_logs" node)
   await prisma.apiLog.create({
