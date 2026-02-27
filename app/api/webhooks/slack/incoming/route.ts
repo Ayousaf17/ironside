@@ -8,21 +8,6 @@ import { HumanMessage } from "@langchain/core/messages";
 
 const agent = createRouterAgent([sw3AnalyticsTool]);
 
-// Rate limiter: max 20 requests per 60 seconds
-const RATE_LIMIT = 20;
-const RATE_WINDOW_MS = 60_000;
-const requestTimestamps: number[] = [];
-
-function isRateLimited(): boolean {
-  const now = Date.now();
-  while (requestTimestamps.length > 0 && requestTimestamps[0] < now - RATE_WINDOW_MS) {
-    requestTimestamps.shift();
-  }
-  if (requestTimestamps.length >= RATE_LIMIT) return true;
-  requestTimestamps.push(now);
-  return false;
-}
-
 function verifySlackSignature(rawBody: string, request: NextRequest): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
   if (!signingSecret) return true; // skip verification if no secret configured (dev)
@@ -70,12 +55,6 @@ export async function POST(request: NextRequest) {
   const text = (body.event?.text || body.text || "").trim();
   if (!text) {
     return NextResponse.json({ ok: true, ignored: "empty_message" });
-  }
-
-  // Rate limit check
-  if (isRateLimited()) {
-    console.warn("[slack/incoming] Rate limited");
-    return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
   }
 
   console.log("[slack/incoming]", text);
