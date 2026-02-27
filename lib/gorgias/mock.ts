@@ -1,0 +1,157 @@
+// Returns hardcoded fake tickets so we never touch real customer data in dev.
+
+export interface GorgiasMessage {
+  id: number;
+  sender: { type: "customer" | "agent"; name: string };
+  body_text: string;
+  created_datetime: string;
+}
+
+export interface GorgiasTicket {
+  id: number;
+  subject: string;
+  status: "open" | "closed";
+  channel: "email" | "chat";
+  assignee: string | null;
+  tags: string[];
+  created_datetime: string;
+  messages: GorgiasMessage[];
+}
+
+const MOCK_TICKETS: GorgiasTicket[] = [
+  {
+    id: 1001,
+    subject: "Order #8432 not received",
+    status: "open",
+    channel: "email",
+    assignee: "alice@ironside.dev",
+    tags: ["shipping", "urgent"],
+    created_datetime: "2026-02-20T09:15:00Z",
+    messages: [
+      { id: 2001, sender: { type: "customer", name: "Jamie Rivera" }, body_text: "Hi, I placed order #8432 five days ago and it still hasn't arrived.", created_datetime: "2026-02-20T09:15:00Z" },
+      { id: 2002, sender: { type: "agent", name: "Alice" }, body_text: "I'm looking into this right now. Let me check with the warehouse.", created_datetime: "2026-02-20T10:03:00Z" },
+    ],
+  },
+  {
+    id: 1002,
+    subject: "Damaged item in package",
+    status: "open",
+    channel: "email",
+    assignee: "bob@ironside.dev",
+    tags: ["returns", "damaged"],
+    created_datetime: "2026-02-21T14:22:00Z",
+    messages: [
+      { id: 2003, sender: { type: "customer", name: "Sam Patel" }, body_text: "The ceramic mug I ordered arrived cracked. I'd like a replacement.", created_datetime: "2026-02-21T14:22:00Z" },
+      { id: 2004, sender: { type: "agent", name: "Bob" }, body_text: "Sorry about that! I'll ship a replacement today.", created_datetime: "2026-02-21T14:45:00Z" },
+    ],
+  },
+  {
+    id: 1003,
+    subject: "How do I change my subscription plan?",
+    status: "closed",
+    channel: "chat",
+    assignee: "alice@ironside.dev",
+    tags: ["billing", "subscription"],
+    created_datetime: "2026-02-18T11:00:00Z",
+    messages: [
+      { id: 2005, sender: { type: "customer", name: "Morgan Lee" }, body_text: "I want to switch from monthly to annual billing.", created_datetime: "2026-02-18T11:00:00Z" },
+      { id: 2006, sender: { type: "agent", name: "Alice" }, body_text: "Go to Account > Billing > Change Plan. Select Annual and confirm.", created_datetime: "2026-02-18T11:08:00Z" },
+    ],
+  },
+  {
+    id: 1004,
+    subject: "Promo code SAVE20 not working",
+    status: "open",
+    channel: "chat",
+    assignee: null,
+    tags: ["billing", "promo"],
+    created_datetime: "2026-02-25T16:30:00Z",
+    messages: [
+      { id: 2007, sender: { type: "customer", name: "Taylor Kim" }, body_text: "I'm trying to apply SAVE20 at checkout but it says invalid.", created_datetime: "2026-02-25T16:30:00Z" },
+    ],
+  },
+  {
+    id: 1005,
+    subject: "Request for bulk order pricing",
+    status: "open",
+    channel: "email",
+    assignee: "bob@ironside.dev",
+    tags: ["sales", "bulk"],
+    created_datetime: "2026-02-22T08:45:00Z",
+    messages: [
+      { id: 2008, sender: { type: "customer", name: "Chris Donovan" }, body_text: "We're looking to order 500 units. Do you offer volume discounts?", created_datetime: "2026-02-22T08:45:00Z" },
+      { id: 2009, sender: { type: "agent", name: "Bob" }, body_text: "For orders over 200 units we offer 15% off. I'll send a formal quote.", created_datetime: "2026-02-22T09:30:00Z" },
+    ],
+  },
+  {
+    id: 1006,
+    subject: "Password reset not sending email",
+    status: "closed",
+    channel: "chat",
+    assignee: "alice@ironside.dev",
+    tags: ["account", "bug"],
+    created_datetime: "2026-02-19T13:10:00Z",
+    messages: [
+      { id: 2010, sender: { type: "customer", name: "Jordan Voss" }, body_text: "I keep clicking forgot password but never receive the reset email.", created_datetime: "2026-02-19T13:10:00Z" },
+      { id: 2011, sender: { type: "agent", name: "Alice" }, body_text: "Check your spam folder. I've also triggered a manual reset.", created_datetime: "2026-02-19T13:15:00Z" },
+    ],
+  },
+  {
+    id: 1007,
+    subject: "Wrong size shipped",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: ["returns", "shipping"],
+    created_datetime: "2026-02-26T10:05:00Z",
+    messages: [
+      { id: 2013, sender: { type: "customer", name: "Avery Brooks" }, body_text: "I ordered a Medium but received a Large. I need this exchanged.", created_datetime: "2026-02-26T10:05:00Z" },
+    ],
+  },
+  {
+    id: 1008,
+    subject: "Cancellation request for order #8510",
+    status: "closed",
+    channel: "email",
+    assignee: "bob@ironside.dev",
+    tags: ["cancellation"],
+    created_datetime: "2026-02-17T15:40:00Z",
+    messages: [
+      { id: 2014, sender: { type: "customer", name: "Riley Tanaka" }, body_text: "Please cancel order #8510. I accidentally ordered the wrong item.", created_datetime: "2026-02-17T15:40:00Z" },
+      { id: 2015, sender: { type: "agent", name: "Bob" }, body_text: "Done! Order #8510 has been cancelled. Refund in 3-5 business days.", created_datetime: "2026-02-17T15:55:00Z" },
+    ],
+  },
+  {
+    id: 1009,
+    subject: "Feature request: dark mode",
+    status: "closed",
+    channel: "chat",
+    assignee: "alice@ironside.dev",
+    tags: ["feature-request"],
+    created_datetime: "2026-02-15T09:00:00Z",
+    messages: [
+      { id: 2016, sender: { type: "customer", name: "Quinn Orozco" }, body_text: "Any plans for a dark mode option?", created_datetime: "2026-02-15T09:00:00Z" },
+      { id: 2017, sender: { type: "agent", name: "Alice" }, body_text: "Great suggestion! I've logged this with our product team.", created_datetime: "2026-02-15T09:12:00Z" },
+    ],
+  },
+  {
+    id: 1010,
+    subject: "International shipping options",
+    status: "open",
+    channel: "chat",
+    assignee: null,
+    tags: ["shipping", "international"],
+    created_datetime: "2026-02-27T07:20:00Z",
+    messages: [
+      { id: 2018, sender: { type: "customer", name: "Kai Müller" }, body_text: "Do you ship to Germany? I can't find international shipping at checkout.", created_datetime: "2026-02-27T07:20:00Z" },
+    ],
+  },
+];
+
+export function getMockTickets(): GorgiasTicket[] {
+  return MOCK_TICKETS;
+}
+
+export function getMockTicket(id: number): GorgiasTicket | undefined {
+  return MOCK_TICKETS.find((t) => t.id === id);
+}
