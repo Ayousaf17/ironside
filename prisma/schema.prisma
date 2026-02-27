@@ -1,0 +1,46 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model ApiLog {
+  id        String   @id @default(uuid())
+  endpoint  String
+  method    String
+  status    Int
+  request   Json?
+  response  Json?
+  error     String?
+  duration  Int?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("api_logs")
+}
+
+model PerformanceMetric {
+  id        String   @id @default(uuid())
+  metric    String
+  value     Float
+  unit      String?
+  context   Json?
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@map("performance_metrics")
+}
+
+model PulseCheck {
+  id            String   @id @default(uuid())
+  channel       String?
+  summary       String
+  ticketCount   Int?     @map("ticket_count")
+  insights      Json?
+  rawAnalytics  Json?    @map("raw_analytics")
+  status        String   @default("completed")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("pulse_checks")
+}
