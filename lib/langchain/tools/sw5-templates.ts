@@ -7,7 +7,8 @@
 //   send_template     — send a templated response to a ticket (public reply)
 
 import { DynamicTool } from "@langchain/core/tools";
-import { getTicket, replyPublic, commentInternal } from "@/lib/gorgias/client";
+import { getTicket, replyPublic, commentInternal, getMacros, getMacro } from "@/lib/gorgias/client";
+import type { GorgiasMacro } from "@/lib/gorgias/mock";
 
 interface Template {
   id: string;
@@ -171,15 +172,20 @@ function extractCustomerName(messages: { sender: { type: string; name: string } 
 export const sw5TemplateTool = new DynamicTool({
   name: "sw5_template_responder",
   description:
-    "Send pre-built responses for common Ironside ticket types. " +
+    "Send pre-built responses OR Gorgias macros for Ironside ticket types. " +
     "Input must be a JSON string with: operation (string). " +
     "Operations: " +
-    "list_templates — show all available templates, " +
-    "preview_template (requires template_id and ticket_id) — preview with customer name filled in, " +
-    "send_template (requires template_id and ticket_id) — send the response as a public reply. " +
-    'Examples: {"operation": "list_templates"}, ' +
-    '{"operation": "preview_template", "template_id": "wifi_driver_fix", "ticket_id": 254532830}, ' +
-    '{"operation": "send_template", "template_id": "order_status_in_build", "ticket_id": 254126423}',
+    "list_templates — show built-in templates, " +
+    "list_macros — show Gorgias macros the team uses, " +
+    "search_macros (requires search) — find macros by name/tag, " +
+    "preview_template (requires template_id and ticket_id) — preview built-in template, " +
+    "preview_macro (requires macro_id and ticket_id) — preview a Gorgias macro with ticket context, " +
+    "send_template (requires template_id and ticket_id) — send built-in template as reply, " +
+    "send_macro (requires macro_id and ticket_id) — send a Gorgias macro as reply. " +
+    'Examples: {"operation": "list_macros"}, ' +
+    '{"operation": "search_macros", "search": "verification"}, ' +
+    '{"operation": "preview_macro", "macro_id": 104, "ticket_id": 254414338}, ' +
+    '{"operation": "send_macro", "macro_id": 106, "ticket_id": 253963210}',
   func: async (input: string) => {
     try {
       const params = JSON.parse(input);
@@ -258,10 +264,90 @@ export const sw5TemplateTool = new DynamicTool({
           }, null, 2);
         }
 
+        // --- Gorgias Macro operations ---
+
+        case "list_macros": {
+          const macros = await getMacros();
+          return JSON.stringify({
+            source: "gorgias",
+            count: macros.length,
+            macros: macros.map(m => ({ id: m.id, name: m.name, tags: m.tags })),
+          }, null, 2);
+        }
+
+        case "search_macros": {
+          if (!params.search) return JSON.stringify({ error: "search_macros requires search" });
+          const found = await getMacros();
+          const term = params.search.toLowerCase();
+          const matches = found.filter(m =>
+            m.name.toLowerCase().includes(term) ||
+            m.tags.some((t: string) => t.toLowerCase().includes(term)) ||
+            m.body_text.toLowerCase().includes(term)
+          );
+          return JSON.stringify({
+            source: "gorgias",
+            search: params.search,
+            count: matches.length,
+            macros: matches.map(m => ({ id: m.id, name: m.name, tags: m.tags })),
+          }, null, 2);
+        }
+
+        case "preview_macro": {
+          if (!params.macro_id || !params.ticket_id) {
+            return JSON.stringify({ error: "preview_macro requires macro_id and ticket_id" });
+          }
+          const macro = await getMacro(Number(params.macro_id));
+          if (!macro) return JSON.stringify({ error: `Macro ${params.macro_id} not found` });
+          const ticket = await getTicket(Number(params.ticket_id));
+          if (!ticket) return JSON.stringify({ error: `Ticket ${params.ticket_id} not found` });
+          const name = extractCustomerName(ticket.messages);
+          // Fill Gorgias-style variables
+          const body = macro.body_text
+            .replace(/\{\{ticket\.customer\.first_name\}\}/g, name)
+            .replace(/\{\{ticket\.assignee_user\.first_name\}\}/g, ticket.assignee?.split("@")[0] || "Ironside Support")
+            .replace(/\{\{ticket\.id\}\}/g, String(ticket.id));
+          return JSON.stringify({
+            source: "gorgias_macro",
+            macro_id: macro.id,
+            macro_name: macro.name,
+            ticket_id: ticket.id,
+            customer_name: name,
+            preview_body: body,
+            actions: macro.actions,
+          }, null, 2);
+        }
+
+        case "send_macro": {
+          if (!params.macro_id || !params.ticket_id) {
+            return JSON.stringify({ error: "send_macro requires macro_id and ticket_id" });
+          }
+          const macro = await getMacro(Number(params.macro_id));
+          if (!macro) return JSON.stringify({ error: `Macro ${params.macro_id} not found` });
+          const ticket = await getTicket(Number(params.ticket_id));
+          if (!ticket) return JSON.stringify({ error: `Ticket ${params.ticket_id} not found` });
+          const name = extractCustomerName(ticket.messages);
+          const body = macro.body_text
+            .replace(/\{\{ticket\.customer\.first_name\}\}/g, name)
+            .replace(/\{\{ticket\.assignee_user\.first_name\}\}/g, ticket.assignee?.split("@")[0] || "Ironside Support")
+            .replace(/\{\{ticket\.id\}\}/g, String(ticket.id));
+          if (body.trim()) {
+            await replyPublic(ticket.id, body);
+          }
+          return JSON.stringify({
+            status: "sent",
+            source: "gorgias_macro",
+            macro_id: macro.id,
+            macro_name: macro.name,
+            ticket_id: ticket.id,
+            reply_sent: body.trim().length > 0,
+            actions_to_apply: macro.actions,
+          }, null, 2);
+        }
+
         default:
           return JSON.stringify({
             error: `Unknown operation: ${params.operation}`,
-            valid_operations: ["list_templates", "preview_template", "send_template"],
+            valid_operations: ["list_templates", "preview_template", "send_template", "list_macros", "search_macros", "preview_macro", "send_macro"],
           });
       }
     } catch (err) {

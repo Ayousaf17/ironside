@@ -1,6 +1,6 @@
-// Fetches tickets from the real Gorgias API (only used in production).
+// Fetches tickets and macros from the real Gorgias API (only used in production).
 
-import type { GorgiasTicket } from "./mock";
+import type { GorgiasTicket, GorgiasMacro } from "./mock";
 
 export interface TicketSearchFilters {
   limit?: number;
@@ -65,4 +65,20 @@ export async function searchTickets(filters: TicketSearchFilters = {}): Promise<
   }
 
   return tickets;
+}
+
+// --- Macros API ---
+
+export async function fetchMacros(): Promise<GorgiasMacro[]> {
+  const res = await fetch(`${getBaseUrl()}/api/macros`, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
+  const data = await res.json();
+  return data.data as GorgiasMacro[];
+}
+
+export async function fetchMacro(id: number): Promise<GorgiasMacro | undefined> {
+  const res = await fetch(`${getBaseUrl()}/api/macros/${id}`, { headers: getAuthHeaders() });
+  if (res.status === 404) return undefined;
+  if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
+  return (await res.json()) as GorgiasMacro;
 }

@@ -619,3 +619,180 @@ export function mockCommentInternal(ticketId: number, body: string): object {
   console.log(`[MOCK] Internal note on ticket #${ticketId}: "${body.slice(0, 80)}..."`);
   return { id: msg.id, ticket_id: ticketId, type: "internal_note", status: "sent" };
 }
+
+// --- Mock Gorgias Macros ---
+// Mirrors the real Gorgias Macros API: GET /api/macros
+
+export interface GorgiasMacro {
+  id: number;
+  name: string;
+  body_text: string;
+  actions: { type: string; value?: string }[];
+  tags: string[];
+  created_datetime: string;
+  updated_datetime: string;
+}
+
+const MOCK_MACROS: GorgiasMacro[] = [
+  {
+    id: 101,
+    name: "Order Status — In Build Window",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "Thank you for reaching out! Your custom build is currently in progress.\n\n" +
+      "Our standard build time is 15-20 business days from the date your order is verified. Here are the stages your order goes through:\n\n" +
+      "1. Order Received & Verification\n2. Build Queue\n3. Assembly\n4. Quality Control & Testing\n5. Shipping (via DHL)\n\n" +
+      "You'll receive an email notification each time your order advances to the next stage. If you have any questions in the meantime, we're here to help!\n\n" +
+      "Best regards,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "ORDER-STATUS" }],
+    tags: ["order-status", "standard"],
+    created_datetime: "2025-06-15T10:00:00Z",
+    updated_datetime: "2026-01-20T14:30:00Z",
+  },
+  {
+    id: 102,
+    name: "Order Status — Shipped",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "Great news — your Ironside build has shipped! Your DHL tracking number is included in the shipping confirmation email we sent.\n\n" +
+      "Track your package: https://www.dhl.com/us-en/home/tracking.html\n\n" +
+      "Need to change delivery? Use DHL On Demand: https://www.dhl.com/us-en/home/our-divisions/parcel/private-customers/receiving/on-demand-delivery.html\n\n" +
+      "Typical delivery is 3-5 business days. Enjoy your new build!\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "ORDER-STATUS" }],
+    tags: ["order-status", "shipped"],
+    created_datetime: "2025-06-15T10:00:00Z",
+    updated_datetime: "2026-02-01T09:00:00Z",
+  },
+  {
+    id: 103,
+    name: "Order Status — Overdue / Delayed",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "I sincerely apologize for the delay on your order. I understand this has exceeded our standard build window, and I know that's frustrating.\n\n" +
+      "I've escalated your order to our build team for a priority status update. I'll personally follow up within 24 hours with specifics on where your build is and a revised timeline.\n\n" +
+      "Thank you for your patience — we want to get your system to you as soon as possible.\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "ORDER-STATUS" }, { type: "set_tags", value: "urgent" }],
+    tags: ["order-status", "overdue", "escalation"],
+    created_datetime: "2025-08-01T10:00:00Z",
+    updated_datetime: "2026-02-10T11:00:00Z",
+  },
+  {
+    id: 104,
+    name: "Verification — Documents Needed",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "Thank you for your order! Before we can begin your build, we need to complete a quick verification step.\n\n" +
+      "Please reply with:\n1. A photo of your government-issued ID (driver's license or passport)\n2. A document showing your billing address (utility bill, bank statement, etc.)\n\n" +
+      "Once verified, your order enters the build queue and the 15-20 business day build window begins.\n\n" +
+      "This is a standard security measure to protect our customers. We appreciate your understanding!\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "ORDER-STATUS" }],
+    tags: ["verification", "standard"],
+    created_datetime: "2025-07-01T10:00:00Z",
+    updated_datetime: "2026-01-15T08:00:00Z",
+  },
+  {
+    id: 105,
+    name: "Verification — Confirmed",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "Your order has been verified! It's now in the build queue.\n\n" +
+      "Your 15-20 business day build window starts today. You'll receive email updates as your build progresses through each stage.\n\n" +
+      "Thank you for getting those documents over — if you have any questions while you wait, we're here!\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_status", value: "closed" }],
+    tags: ["verification", "confirmed"],
+    created_datetime: "2025-07-01T10:00:00Z",
+    updated_datetime: "2026-01-15T08:00:00Z",
+  },
+  {
+    id: 106,
+    name: "WIFI / LAN Driver Fix",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "This is a common issue with fresh Windows installs — the WiFi/LAN drivers need to be installed manually.\n\n" +
+      "Since you may not have internet on the PC yet:\n\n" +
+      "Option A (fastest): Use your phone as a USB hotspot — plug your phone into the PC via USB, enable USB tethering in your phone's settings, then run Windows Update.\n\n" +
+      "Option B: On another device, go to your motherboard manufacturer's website, download the WiFi/LAN drivers to a USB flash drive, and install them on your new build.\n\n" +
+      "If you tell me your motherboard model (check System Information on the PC), I'll send you the direct download link!\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "urgent" }],
+    tags: ["technical", "drivers", "wifi"],
+    created_datetime: "2025-09-01T10:00:00Z",
+    updated_datetime: "2026-02-15T16:00:00Z",
+  },
+  {
+    id: 107,
+    name: "Water Cooling Leak — CRITICAL RMA",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "Thank you for contacting us immediately — powering off was absolutely the right call.\n\n" +
+      "IMPORTANT: Please do NOT power the system back on. Liquid contact with components can cause damage that worsens with electricity.\n\n" +
+      "Here's what happens next:\n1. We're initiating an RMA for your system\n2. You'll receive a prepaid DHL shipping label within 24 hours\n3. Ship the system back in its original packaging\n4. Our techs will inspect, repair, and fully test before returning it\n\n" +
+      "Any damage caused by the leak is fully covered under warranty. We sincerely apologize for this experience.\n\n" +
+      "I'll follow up shortly with your shipping label.\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "urgent" }, { type: "set_tags", value: "RETURN/EXCHANGE" }],
+    tags: ["technical", "critical", "rma", "water-cooling"],
+    created_datetime: "2025-10-01T10:00:00Z",
+    updated_datetime: "2026-02-20T12:00:00Z",
+  },
+  {
+    id: 108,
+    name: "Return — Process & Policy",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "We're sorry to hear the build isn't meeting your expectations. Here's our return process:\n\n" +
+      "• Returns accepted within 30 days of delivery\n• System must be in original condition with all accessories\n• 15% restocking fee applies\n• Refund processed within 5-7 business days after inspection\n\n" +
+      "To start:\n1. Reply confirming you'd like to proceed\n2. We'll send a prepaid return label\n3. Pack in the original box and ship back\n\n" +
+      "Before returning — would you like to tell us what's not meeting expectations? We may be able to resolve the issue or suggest an upgrade.\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "RETURN/EXCHANGE" }],
+    tags: ["returns", "standard"],
+    created_datetime: "2025-06-20T10:00:00Z",
+    updated_datetime: "2026-01-25T10:00:00Z",
+  },
+  {
+    id: 109,
+    name: "CSAT — 2 Week Check-In",
+    body_text:
+      "Hi {{ticket.customer.first_name}},\n\n" +
+      "It's been about two weeks since you received your Ironside build — how's everything going?\n\n" +
+      "We'd love to hear how it's performing! If you've run into any issues or have questions about getting the most out of your system, we're here to help.\n\n" +
+      "Enjoy your build!\n\n" +
+      "Best,\n{{ticket.assignee_user.first_name}}",
+    actions: [{ type: "set_tags", value: "csat-2week" }],
+    tags: ["csat", "follow-up"],
+    created_datetime: "2025-11-01T10:00:00Z",
+    updated_datetime: "2026-02-01T10:00:00Z",
+  },
+  {
+    id: 110,
+    name: "Spam / Non-Support Auto-Close",
+    body_text: "",
+    actions: [{ type: "set_tags", value: "auto-close" }, { type: "set_tags", value: "non-support-related" }, { type: "set_status", value: "closed" }],
+    tags: ["spam", "auto-close"],
+    created_datetime: "2025-06-01T10:00:00Z",
+    updated_datetime: "2026-02-20T10:00:00Z",
+  },
+];
+
+export function getMockMacros(): GorgiasMacro[] {
+  return MOCK_MACROS;
+}
+
+export function getMockMacro(id: number): GorgiasMacro | undefined {
+  return MOCK_MACROS.find((m) => m.id === id);
+}
+
+export function searchMockMacros(search?: string): GorgiasMacro[] {
+  if (!search) return MOCK_MACROS;
+  const term = search.toLowerCase();
+  return MOCK_MACROS.filter(
+    (m) =>
+      m.name.toLowerCase().includes(term) ||
+      m.tags.some((t) => t.toLowerCase().includes(term))
+  );
+}
