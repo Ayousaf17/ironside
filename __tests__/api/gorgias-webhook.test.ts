@@ -112,6 +112,37 @@ describe("POST /api/webhooks/gorgias/events", () => {
     expect(mock.agentBehaviorLog.create).not.toHaveBeenCalled();
   });
 
+  it("parses and logs an HTTP Integration event (flat format)", async () => {
+    const mock = getPrismaMock();
+    const req = makeRequest({
+      event_type: "ticket-message-created",
+      ticket_id: "254414338",
+      subject: "Track Order #9001",
+      status: "open",
+      assignee_email: "spencer@ironsidecomputers.com",
+      customer_email: "john@gmail.com",
+      last_message: "Your order is building.",
+      tags: "order-status",
+      updated_at: "2026-02-28T15:00:00Z",
+    });
+
+    const res = await POST(req);
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.logged).toBe(1);
+    expect(mock.agentBehaviorLog.create).toHaveBeenCalledTimes(1);
+    expect(mock.agentBehaviorLog.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          agent: "spencer@ironsidecomputers.com",
+          action: "message",
+          ticketId: 254414338,
+        }),
+      })
+    );
+  });
+
   it("returns 500 on invalid JSON", async () => {
     const req = new Request("http://localhost:3001/api/webhooks/gorgias/events", {
       method: "POST",

@@ -12,6 +12,7 @@ import { prisma } from "@/lib/prisma";
 
 // --- Gorgias webhook payload types ---
 
+// Native webhook format (from Gorgias Webhooks API — not currently used)
 interface GorgiasWebhookPayload {
   type: string;           // "ticket-created", "ticket-updated", "ticket-message-created"
   ticket_id: number;
@@ -41,6 +42,24 @@ interface GorgiasWebhookPayload {
     tags?: { from: { name: string }[]; to: { name: string }[] };
   };
   created_datetime?: string;
+}
+
+// HTTP Integration format — flat JSON built from Gorgias {{template.variables}}
+// Each trigger type gets its own HTTP Integration with hardcoded event_type field
+export interface GorgiasHttpIntegrationPayload {
+  event_type: string;           // hardcoded per integration: "ticket-created", "ticket-updated", "ticket-message-created"
+  ticket_id: string | number;   // {{ticket.id}} — Gorgias may send as string
+  subject?: string;             // {{ticket.subject}}
+  status?: string;              // {{ticket.status}}
+  channel?: string;             // {{ticket.channel}}
+  customer_name?: string;       // {{ticket.customer.name}}
+  customer_email?: string;      // {{ticket.customer.email}}
+  assignee_email?: string;      // {{ticket.assignee_user.email}}
+  assignee_name?: string;       // {{ticket.assignee_user.name}}
+  last_message?: string;        // {{ticket.messages[-1].body_text}}
+  tags?: string;                // {{ticket.tags}} — comes as string, not array
+  created_at?: string;          // {{ticket.created_datetime}}
+  updated_at?: string;          // {{ticket.updated_datetime}}
 }
 
 // --- Category detection (reuses SW4 logic) ---
@@ -76,6 +95,93 @@ export interface BehaviorLogEntry {
   rawEvent: object;
   occurredAt: Date;
 }
+
+// --- Detect payload format ---
+// HTTP Integration payloads have event_type (hardcoded string we set)
+// Native webhook payloads have type (sent by Gorgias)
+
+function isHttpIntegrationPayload(payload: Record<string, unknown>): boolean {
+  return typeof payload.event_type === "string";
+}
+
+// --- Parse HTTP Integration payload (flat template-variable format) ---
+
+function parseTags(tagsField: unknown): string[] {
+  if (!tagsField) return [];
+  if (Array.isArray(tagsField)) return tagsField.map(String);
+  // Gorgias {{ticket.tags}} comes as a string like "order-status, vip" or "['order-status']"
+  const str = String(tagsField);
+  if (!str || str === "[]" || str === "None") return [];
+  return str.split(",").map(t => t.replace(/[[\]']/g, "").trim()).filter(Boolean);
+}
+
+export function parseHttpIntegrationEvent(payload: GorgiasHttpIntegrationPayload): BehaviorLogEntry[] {
+  const entries: BehaviorLogEntry[] = [];
+  const ticketId = Number(payload.ticket_id) || 0;
+  const subject = payload.subject || "";
+  const tags = parseTags(payload.tags);
+  const category = detectCategory(subject, tags);
+  const agent = payload.assignee_email || "system";
+  const occurredAt = new Date(payload.updated_at || payload.created_at || new Date().toISOString());
+
+  switch (payload.event_type) {
+    case "ticket-created": {
+      entries.push({
+        agent,
+        action: "ticket_created",
+        ticketId,
+        ticketSubject: subject,
+        category,
+        tagsApplied: tags,
+        reopened: false,
+        rawEvent: payload,
+        occurredAt,
+      });
+      break;
+    }
+
+    case "ticket-updated": {
+      // HTTP Integration doesn't give us granular changes (what changed from/to).
+      // We log a generic "update" with the current snapshot of the ticket.
+      entries.push({
+        agent,
+        action: "update",
+        ticketId,
+        ticketSubject: subject,
+        category,
+        tagsApplied: tags,
+        reopened: false,
+        rawEvent: payload,
+        occurredAt,
+      });
+      break;
+    }
+
+    case "ticket-message-created": {
+      // HTTP Integration gives us the last message text but no sender details.
+      // We log all messages — the assignee is the most likely agent who sent it.
+      // If the last message is empty, it was likely a customer action (no reply text).
+      const messageText = payload.last_message || "";
+      entries.push({
+        agent,
+        action: "message",
+        ticketId,
+        ticketSubject: subject,
+        category,
+        responseText: messageText || undefined,
+        tagsApplied: tags,
+        reopened: false,
+        rawEvent: payload,
+        occurredAt,
+      });
+      break;
+    }
+  }
+
+  return entries;
+}
+
+// --- Parse native Gorgias webhook payload (rich nested format) ---
 
 export function parseGorgiasEvent(payload: GorgiasWebhookPayload): BehaviorLogEntry[] {
   const entries: BehaviorLogEntry[] = [];
@@ -184,6 +290,15 @@ export function parseGorgiasEvent(payload: GorgiasWebhookPayload): BehaviorLogEn
   }
 
   return entries;
+}
+
+// --- Unified entry point — detects payload format and routes to correct parser ---
+
+export function parseEvent(payload: Record<string, unknown>): BehaviorLogEntry[] {
+  if (isHttpIntegrationPayload(payload)) {
+    return parseHttpIntegrationEvent(payload as unknown as GorgiasHttpIntegrationPayload);
+  }
+  return parseGorgiasEvent(payload as unknown as GorgiasWebhookPayload);
 }
 
 // --- Write parsed entries to database ---

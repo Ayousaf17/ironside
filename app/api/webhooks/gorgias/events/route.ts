@@ -9,7 +9,7 @@
 //   Events: ticket-created, ticket-updated, ticket-message-created
 
 import { NextResponse } from "next/server";
-import { parseGorgiasEvent, logBehaviorEntries } from "@/lib/gorgias/events";
+import { parseEvent, logBehaviorEntries } from "@/lib/gorgias/events";
 import { prisma } from "@/lib/prisma";
 
 export const maxDuration = 30;
@@ -21,10 +21,11 @@ export async function POST(request: Request) {
     const payload = await request.json();
 
     // Log the raw webhook for debugging
-    console.log(`[gorgias-webhook] Received event: ${payload.type} for ticket ${payload.ticket_id}`);
+    const eventType = payload.event_type || payload.type || "unknown";
+    console.log(`[gorgias-webhook] Received event: ${eventType} for ticket ${payload.ticket_id}`);
 
-    // Parse the event into structured behavior entries
-    const entries = parseGorgiasEvent(payload);
+    // Parse the event — auto-detects HTTP Integration vs native webhook format
+    const entries = parseEvent(payload);
 
     if (entries.length === 0) {
       // Event type we don't track (e.g., customer message) — acknowledge silently
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
           endpoint: "/api/webhooks/gorgias/events",
           method: "POST",
           status: 200,
-          request: { type: payload.type, ticket_id: payload.ticket_id },
+          request: { type: eventType, ticket_id: payload.ticket_id },
           response: { skipped: true, reason: "no_agent_action" },
           duration: Date.now() - startTime,
         },
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
         endpoint: "/api/webhooks/gorgias/events",
         method: "POST",
         status: 200,
-        request: { type: payload.type, ticket_id: payload.ticket_id },
+        request: { type: eventType, ticket_id: payload.ticket_id },
         response: { logged: count, actions: entries.map(e => e.action) },
         duration: Date.now() - startTime,
       },
