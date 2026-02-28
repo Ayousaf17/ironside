@@ -43,3 +43,29 @@ model PulseCheck {
 
   @@map("pulse_checks")
 }
+
+model AgentBehaviorLog {
+  id                   String   @id @default(uuid())
+  gorgiasEventId       String?  @unique @map("gorgias_event_id")
+  agent                String
+  action               String   // reply, internal_note, assign, close, reopen, tag, macro_used, ticket_created
+  ticketId             Int      @map("ticket_id")
+  ticketSubject        String?  @map("ticket_subject")
+  category             String?  // track_order, order_verification, product_question, report_issue, etc.
+  responseText         String?  @map("response_text")
+  macroIdUsed          Int?     @map("macro_id_used")
+  timeToRespondMin     Float?   @map("time_to_respond_min")
+  touchesToResolution  Int?     @map("touches_to_resolution")
+  reopened             Boolean  @default(false)
+  csatScore            Int?     @map("csat_score")
+  tagsApplied          String[] @map("tags_applied")
+  rawEvent             Json?    @map("raw_event")
+  occurredAt           DateTime @map("occurred_at")
+  createdAt            DateTime @default(now()) @map("created_at")
+
+  @@index([agent])
+  @@index([ticketId])
+  @@index([action])
+  @@index([occurredAt])
+  @@map("agent_behavior_logs")
+}
