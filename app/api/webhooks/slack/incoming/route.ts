@@ -5,12 +5,22 @@ import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sw1ReaderTool } from "@/lib/langchain/tools/sw1-reader";
 import { sw2WriterTool } from "@/lib/langchain/tools/sw2-writer";
+import { sw4TriageTool } from "@/lib/langchain/tools/sw4-triage";
+import { sw5TemplateTool } from "@/lib/langchain/tools/sw5-templates";
+import { sw6EscalationTool } from "@/lib/langchain/tools/sw6-escalation";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 
 export const maxDuration = 60;
 
-const agent = createRouterAgent([sw3AnalyticsTool, sw1ReaderTool, sw2WriterTool]);
+const agent = createRouterAgent([
+  sw1ReaderTool,
+  sw2WriterTool,
+  sw3AnalyticsTool,
+  sw4TriageTool,
+  sw5TemplateTool,
+  sw6EscalationTool,
+]);
 
 function verifySlackSignature(rawBody: string, request: NextRequest): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;

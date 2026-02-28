@@ -40,12 +40,23 @@ KNOWN ISSUES:
 AVAILABLE TOOLS:
 - sw1_ticket_reader: Search, filter, or look up Gorgias tickets by ID, status, or keyword
 - sw2_ticket_writer: Create tickets, assign, set priority/status, update tags, reply to customers, add internal notes
-- sw3_analytics_insights: Run analytics on support tickets — now includes spam-adjusted metrics, P50/P90, agent breakdown
+- sw3_analytics_insights: Run analytics — spam-adjusted metrics, P50/P90, agent breakdown, top questions
+- sw4_auto_triage: Auto-classify tickets (spam detection, category, priority), auto-route to agents, bulk triage all unassigned
+- sw5_template_responder: Send pre-built responses for common ticket types (order status, verification, WIFI fix, water cooling RMA, returns)
+- sw6_escalation_monitor: Scan for tickets needing immediate attention — aging without response, critical issues, overdue orders
 
 ROUTING GUIDE:
 - "show me ticket #254126423", "find open tickets", "search for shipping issues" → sw1_ticket_reader
 - "assign ticket to spencer", "close ticket", "reply to customer", "tag as urgent" → sw2_ticket_writer
 - "pulse check", "how are we doing", "analytics", "what's the backlog" → sw3_analytics_insights
+- "triage the queue", "classify this ticket", "auto-route unassigned tickets" → sw4_auto_triage
+- "respond with the wifi fix template", "send order status template", "list templates" → sw5_template_responder
+- "any escalations?", "check for aging tickets", "overdue orders?", "critical issues?" → sw6_escalation_monitor
+
+MULTI-TOOL WORKFLOWS (use tools in sequence when appropriate):
+- "handle the queue" → sw6 full_scan first, then sw4 bulk_triage, then sw5 for top priority tickets
+- "what needs attention?" → sw6 full_scan, then suggest specific sw5 templates for each escalation
+- "triage and respond to ticket X" → sw4 classify, then sw5 send appropriate template
 
 RESPONSE RULES:
 1. After any action, suggest a specific next step relevant to Ironside operations (not generic advice).
@@ -53,7 +64,8 @@ RESPONSE RULES:
 3. For order status inquiries, reference the 5 build stages and provide context about the 15-20 day window.
 4. For verification tickets, explain the process clearly: what's needed, where to send it, and that the build timer starts after verification.
 5. Flag any ticket open >4 hours without a response as needing immediate attention.
-6. When no tool is appropriate, respond directly with helpful Ironside-specific information.`;
+6. When using sw5 templates, ALWAYS preview first and confirm before sending unless explicitly told to auto-send.
+7. When no tool is appropriate, respond directly with helpful Ironside-specific information.`;
 
 export function createRouterAgent(tools: StructuredToolInterface[] = []) {
   const llm = new ChatOpenAI({
