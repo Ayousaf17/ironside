@@ -3,10 +3,11 @@ import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
+import { sw1ReaderTool } from "@/lib/langchain/tools/sw1-reader";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 
-const agent = createRouterAgent([sw3AnalyticsTool]);
+const agent = createRouterAgent([sw3AnalyticsTool, sw1ReaderTool]);
 
 function verifySlackSignature(rawBody: string, request: NextRequest): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
