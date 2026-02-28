@@ -4,10 +4,11 @@ import { prisma } from "@/lib/prisma";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sw1ReaderTool } from "@/lib/langchain/tools/sw1-reader";
+import { sw2WriterTool } from "@/lib/langchain/tools/sw2-writer";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 
-const agent = createRouterAgent([sw3AnalyticsTool, sw1ReaderTool]);
+const agent = createRouterAgent([sw3AnalyticsTool, sw1ReaderTool, sw2WriterTool]);
 
 function verifySlackSignature(rawBody: string, request: NextRequest): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
