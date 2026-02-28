@@ -1,4 +1,12 @@
-// Returns hardcoded fake tickets so we never touch real customer data in dev.
+// Mock Gorgias tickets modeled on real Ironside Computers support data.
+// Distribution mirrors actual pulse check patterns (Jan 29 - Feb 27, 2026):
+//   ~30% Track Order / ORDER-STATUS
+//   ~12% Order Verification
+//   ~12% Product Question
+//   ~8%  Report Issue / Technical
+//   ~5%  Return / Exchange
+//   ~3%  Contact Form (real)
+//   ~30% Spam / Non-Support (auto-closed)
 
 export interface GorgiasMessage {
   id: number;
@@ -18,132 +26,481 @@ export interface GorgiasTicket {
   messages: GorgiasMessage[];
 }
 
+// Real agents: Spencer, Danni-Jean, Mackenzie, Gabe
+// Real ticket IDs: 252xxxxx - 257xxxxx range
+// Real order numbers: 95xxxx range
+
 const MOCK_TICKETS: GorgiasTicket[] = [
+  // ========================================
+  // TRACK ORDER / ORDER-STATUS (8 tickets)
+  // ========================================
   {
-    id: 1001,
-    subject: "Order #8432 not received",
-    status: "open",
-    channel: "email",
-    assignee: "alice@ironside.dev",
-    tags: ["shipping", "urgent"],
-    created_datetime: "2026-02-20T09:15:00Z",
-    messages: [
-      { id: 2001, sender: { type: "customer", name: "Jamie Rivera" }, body_text: "Hi, I placed order #8432 five days ago and it still hasn't arrived.", created_datetime: "2026-02-20T09:15:00Z" },
-      { id: 2002, sender: { type: "agent", name: "Alice" }, body_text: "I'm looking into this right now. Let me check with the warehouse.", created_datetime: "2026-02-20T10:03:00Z" },
-    ],
-  },
-  {
-    id: 1002,
-    subject: "Damaged item in package",
-    status: "open",
-    channel: "email",
-    assignee: "bob@ironside.dev",
-    tags: ["returns", "damaged"],
-    created_datetime: "2026-02-21T14:22:00Z",
-    messages: [
-      { id: 2003, sender: { type: "customer", name: "Sam Patel" }, body_text: "The ceramic mug I ordered arrived cracked. I'd like a replacement.", created_datetime: "2026-02-21T14:22:00Z" },
-      { id: 2004, sender: { type: "agent", name: "Bob" }, body_text: "Sorry about that! I'll ship a replacement today.", created_datetime: "2026-02-21T14:45:00Z" },
-    ],
-  },
-  {
-    id: 1003,
-    subject: "How do I change my subscription plan?",
-    status: "closed",
-    channel: "chat",
-    assignee: "alice@ironside.dev",
-    tags: ["billing", "subscription"],
-    created_datetime: "2026-02-18T11:00:00Z",
-    messages: [
-      { id: 2005, sender: { type: "customer", name: "Morgan Lee" }, body_text: "I want to switch from monthly to annual billing.", created_datetime: "2026-02-18T11:00:00Z" },
-      { id: 2006, sender: { type: "agent", name: "Alice" }, body_text: "Go to Account > Billing > Change Plan. Select Annual and confirm.", created_datetime: "2026-02-18T11:08:00Z" },
-    ],
-  },
-  {
-    id: 1004,
-    subject: "Promo code SAVE20 not working",
+    id: 254126423,
+    subject: "Track Order",
     status: "open",
     channel: "chat",
     assignee: null,
-    tags: ["billing", "promo"],
-    created_datetime: "2026-02-25T16:30:00Z",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-25T14:30:00Z",
     messages: [
-      { id: 2007, sender: { type: "customer", name: "Taylor Kim" }, body_text: "I'm trying to apply SAVE20 at checkout but it says invalid.", created_datetime: "2026-02-25T16:30:00Z" },
+      { id: 5001, sender: { type: "customer", name: "Marcus Johnson" }, body_text: "I placed order #952555 on Feb 12 and haven't received any updates. What stage is my build at?", created_datetime: "2026-02-25T14:30:00Z" },
     ],
   },
   {
-    id: 1005,
-    subject: "Request for bulk order pricing",
-    status: "open",
-    channel: "email",
-    assignee: "bob@ironside.dev",
-    tags: ["sales", "bulk"],
-    created_datetime: "2026-02-22T08:45:00Z",
-    messages: [
-      { id: 2008, sender: { type: "customer", name: "Chris Donovan" }, body_text: "We're looking to order 500 units. Do you offer volume discounts?", created_datetime: "2026-02-22T08:45:00Z" },
-      { id: 2009, sender: { type: "agent", name: "Bob" }, body_text: "For orders over 200 units we offer 15% off. I'll send a formal quote.", created_datetime: "2026-02-22T09:30:00Z" },
-    ],
-  },
-  {
-    id: 1006,
-    subject: "Password reset not sending email",
-    status: "closed",
-    channel: "chat",
-    assignee: "alice@ironside.dev",
-    tags: ["account", "bug"],
-    created_datetime: "2026-02-19T13:10:00Z",
-    messages: [
-      { id: 2010, sender: { type: "customer", name: "Jordan Voss" }, body_text: "I keep clicking forgot password but never receive the reset email.", created_datetime: "2026-02-19T13:10:00Z" },
-      { id: 2011, sender: { type: "agent", name: "Alice" }, body_text: "Check your spam folder. I've also triggered a manual reset.", created_datetime: "2026-02-19T13:15:00Z" },
-    ],
-  },
-  {
-    id: 1007,
-    subject: "Wrong size shipped",
-    status: "open",
-    channel: "email",
-    assignee: null,
-    tags: ["returns", "shipping"],
-    created_datetime: "2026-02-26T10:05:00Z",
-    messages: [
-      { id: 2013, sender: { type: "customer", name: "Avery Brooks" }, body_text: "I ordered a Medium but received a Large. I need this exchanged.", created_datetime: "2026-02-26T10:05:00Z" },
-    ],
-  },
-  {
-    id: 1008,
-    subject: "Cancellation request for order #8510",
-    status: "closed",
-    channel: "email",
-    assignee: "bob@ironside.dev",
-    tags: ["cancellation"],
-    created_datetime: "2026-02-17T15:40:00Z",
-    messages: [
-      { id: 2014, sender: { type: "customer", name: "Riley Tanaka" }, body_text: "Please cancel order #8510. I accidentally ordered the wrong item.", created_datetime: "2026-02-17T15:40:00Z" },
-      { id: 2015, sender: { type: "agent", name: "Bob" }, body_text: "Done! Order #8510 has been cancelled. Refund in 3-5 business days.", created_datetime: "2026-02-17T15:55:00Z" },
-    ],
-  },
-  {
-    id: 1009,
-    subject: "Feature request: dark mode",
-    status: "closed",
-    channel: "chat",
-    assignee: "alice@ironside.dev",
-    tags: ["feature-request"],
-    created_datetime: "2026-02-15T09:00:00Z",
-    messages: [
-      { id: 2016, sender: { type: "customer", name: "Quinn Orozco" }, body_text: "Any plans for a dark mode option?", created_datetime: "2026-02-15T09:00:00Z" },
-      { id: 2017, sender: { type: "agent", name: "Alice" }, body_text: "Great suggestion! I've logged this with our product team.", created_datetime: "2026-02-15T09:12:00Z" },
-    ],
-  },
-  {
-    id: 1010,
-    subject: "International shipping options",
+    id: 254090215,
+    subject: "Track Order",
     status: "open",
     channel: "chat",
     assignee: null,
-    tags: ["shipping", "international"],
-    created_datetime: "2026-02-27T07:20:00Z",
+    tags: ["ORDER-STATUS", "urgent"],
+    created_datetime: "2026-02-25T11:05:00Z",
     messages: [
-      { id: 2018, sender: { type: "customer", name: "Kai Müller" }, body_text: "Do you ship to Germany? I can't find international shipping at checkout.", created_datetime: "2026-02-27T07:20:00Z" },
+      { id: 5002, sender: { type: "customer", name: "Emily Chen" }, body_text: "Order #952532. It's been 20 days and I still haven't received a shipping confirmation. This is getting ridiculous.", created_datetime: "2026-02-25T11:05:00Z" },
+    ],
+  },
+  {
+    id: 253911765,
+    subject: "Track Order",
+    status: "closed",
+    channel: "chat",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-24T09:20:00Z",
+    messages: [
+      { id: 5003, sender: { type: "customer", name: "Jake Williams" }, body_text: "Hey can I get an update on order #952467? Placed it Feb 8.", created_datetime: "2026-02-24T09:20:00Z" },
+      { id: 5004, sender: { type: "agent", name: "Spencer" }, body_text: "Hi Jake! Your order is currently in Stage 2 — Build Queue. Expected to enter assembly within 3-5 business days. You'll receive an email once it moves to Stage 3.", created_datetime: "2026-02-24T09:35:00Z" },
+    ],
+  },
+  {
+    id: 253740330,
+    subject: "Track Order",
+    status: "closed",
+    channel: "email",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-23T16:45:00Z",
+    messages: [
+      { id: 5005, sender: { type: "customer", name: "Sarah Martinez" }, body_text: "Hello, I ordered a custom build (order #952311) about 10 days ago. Could you tell me where it is in the build process?", created_datetime: "2026-02-23T16:45:00Z" },
+      { id: 5006, sender: { type: "agent", name: "Spencer" }, body_text: "Hi Sarah! Order #952311 is in Stage 3 — Assembly. Our tech team is building your system now. Once complete, it moves to Quality Control (Stage 4) before shipping. Estimated 5-7 more business days.", created_datetime: "2026-02-23T17:10:00Z" },
+    ],
+  },
+  {
+    id: 253344850,
+    subject: "Track Order",
+    status: "closed",
+    channel: "chat",
+    assignee: "danni-jean@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-22T10:15:00Z",
+    messages: [
+      { id: 5007, sender: { type: "customer", name: "Tyler Ross" }, body_text: "Tracking for order 952099?", created_datetime: "2026-02-22T10:15:00Z" },
+      { id: 5008, sender: { type: "agent", name: "Danni-Jean" }, body_text: "Hi Tyler! Your order #952099 shipped via DHL yesterday. Tracking number: 1Z999AA10123456784. You can track it at dhl.com. Expected delivery: Feb 26.", created_datetime: "2026-02-22T10:22:00Z" },
+    ],
+  },
+  {
+    id: 254164939,
+    subject: "Track Order",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: ["ORDER-STATUS", "urgent"],
+    created_datetime: "2026-02-26T08:30:00Z",
+    messages: [
+      { id: 5009, sender: { type: "customer", name: "David Park" }, body_text: "I've been waiting 25 days for order #952051. Your website says 15-20 business days. This is past due. I need an update immediately or I'm disputing the charge.", created_datetime: "2026-02-26T08:30:00Z" },
+    ],
+  },
+  {
+    id: 253999359,
+    subject: "Fwd: Order 952099 Update: Stage 1",
+    status: "closed",
+    channel: "email",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-21T13:00:00Z",
+    messages: [
+      { id: 5010, sender: { type: "customer", name: "Tyler Ross" }, body_text: "I got this email saying Stage 1 but I thought my order was already further along? Can you clarify what stage means what?", created_datetime: "2026-02-21T13:00:00Z" },
+      { id: 5011, sender: { type: "agent", name: "Spencer" }, body_text: "Hey Tyler! The stages are: 1) Order Received & Verification, 2) Build Queue, 3) Assembly, 4) Quality Control & Testing, 5) Shipping. That email was the initial confirmation. Your order has since moved to Stage 3.", created_datetime: "2026-02-21T13:25:00Z" },
+    ],
+  },
+  {
+    id: 254333436,
+    subject: "DHL On Demand Delivery",
+    status: "closed",
+    channel: "email",
+    assignee: "danni-jean@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-24T11:30:00Z",
+    messages: [
+      { id: 5012, sender: { type: "customer", name: "Amanda Liu" }, body_text: "I got a DHL notification but I won't be home. Can I change the delivery to a DHL pickup location?", created_datetime: "2026-02-24T11:30:00Z" },
+      { id: 5013, sender: { type: "agent", name: "Danni-Jean" }, body_text: "Hi Amanda! Yes, you can manage delivery via DHL On Demand Delivery at dhl.com/ondemand. Use your tracking number to redirect to a DHL Service Point near you.", created_datetime: "2026-02-24T11:45:00Z" },
+    ],
+  },
+
+  // ========================================
+  // ORDER VERIFICATION (4 tickets)
+  // ========================================
+  {
+    id: 254414338,
+    subject: "Re: Order 952555 Update: Order Verification",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: ["ORDER-STATUS", "urgent"],
+    created_datetime: "2026-02-25T09:00:00Z",
+    messages: [
+      { id: 5020, sender: { type: "customer", name: "Marcus Johnson" }, body_text: "You asked me to verify my order but I already sent my ID and proof of address 3 days ago. How long does this take? My build timer shouldn't start until verification is done right?", created_datetime: "2026-02-25T09:00:00Z" },
+    ],
+  },
+  {
+    id: 253956318,
+    subject: "Re: Order 952532 Update: Order Verification",
+    status: "closed",
+    channel: "email",
+    assignee: "danni-jean@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-23T08:15:00Z",
+    messages: [
+      { id: 5021, sender: { type: "customer", name: "Emily Chen" }, body_text: "Here is my photo ID and a utility bill with my address. Please verify my order ASAP.", created_datetime: "2026-02-23T08:15:00Z" },
+      { id: 5022, sender: { type: "agent", name: "Danni-Jean" }, body_text: "Hi Emily, thank you for sending those over! Your order #952532 has been verified and is now in the build queue. You'll receive a confirmation email shortly. Build time is 15-20 business days from today.", created_datetime: "2026-02-23T09:40:00Z" },
+    ],
+  },
+  {
+    id: 254943155,
+    subject: "Re: Order 951474 Update: Order Verification",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: ["ORDER-STATUS", "urgent"],
+    created_datetime: "2026-02-26T15:20:00Z",
+    messages: [
+      { id: 5023, sender: { type: "customer", name: "Ryan O'Brien" }, body_text: "I don't understand why I need to verify. I've ordered from you before. My order number is 951474. Can someone call me?", created_datetime: "2026-02-26T15:20:00Z" },
+    ],
+  },
+  {
+    id: 253838153,
+    subject: "Order Verification",
+    status: "closed",
+    channel: "email",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["ORDER-STATUS"],
+    created_datetime: "2026-02-22T14:00:00Z",
+    messages: [
+      { id: 5024, sender: { type: "customer", name: "Lisa Nguyen" }, body_text: "What documents do I need to send for order verification? I just placed order #952467.", created_datetime: "2026-02-22T14:00:00Z" },
+      { id: 5025, sender: { type: "agent", name: "Spencer" }, body_text: "Hi Lisa! For verification we need: 1) A photo of your government-issued ID, and 2) A document showing your billing address (utility bill, bank statement, etc.). You can reply to this email with the attachments. Once verified, your order enters the build queue.", created_datetime: "2026-02-22T14:20:00Z" },
+    ],
+  },
+
+  // ========================================
+  // PRODUCT QUESTIONS (4 tickets)
+  // ========================================
+  {
+    id: 254461813,
+    subject: "Product Question",
+    status: "open",
+    channel: "chat",
+    assignee: null,
+    tags: [],
+    created_datetime: "2026-02-26T19:30:00Z",
+    messages: [
+      { id: 5030, sender: { type: "customer", name: "Brandon Scott" }, body_text: "I'm looking at the Prism II. Can I upgrade the GPU to a 5090 instead of the 5080? What would the price difference be?", created_datetime: "2026-02-26T19:30:00Z" },
+    ],
+  },
+  {
+    id: 254059362,
+    subject: "Product Question",
+    status: "closed",
+    channel: "chat",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: [],
+    created_datetime: "2026-02-25T15:00:00Z",
+    messages: [
+      { id: 5031, sender: { type: "customer", name: "Jessica Kim" }, body_text: "Does the Titanium Pro come with WiFi or do I need an adapter?", created_datetime: "2026-02-25T15:00:00Z" },
+      { id: 5032, sender: { type: "agent", name: "Spencer" }, body_text: "Hi Jessica! The Titanium Pro includes a built-in WiFi 7 module on the motherboard. No separate adapter needed. It also has Bluetooth 5.4.", created_datetime: "2026-02-25T15:08:00Z" },
+    ],
+  },
+  {
+    id: 253752016,
+    subject: "Product Question",
+    status: "closed",
+    channel: "email",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["PRODUCT"],
+    created_datetime: "2026-02-23T10:45:00Z",
+    messages: [
+      { id: 5033, sender: { type: "customer", name: "Alex Thompson" }, body_text: "What's the difference between the Minion and the Minion Pro? Is the Pro worth the extra money for streaming + gaming?", created_datetime: "2026-02-23T10:45:00Z" },
+      { id: 5034, sender: { type: "agent", name: "Spencer" }, body_text: "Great question Alex! The Minion Pro has a higher-tier GPU (RTX 5070 vs 5060), 32GB RAM vs 16GB, and a larger SSD. For streaming + gaming simultaneously, the Pro is definitely worth it — the extra RAM and GPU power make a big difference for encoding while gaming.", created_datetime: "2026-02-23T11:20:00Z" },
+    ],
+  },
+  {
+    id: 254338352,
+    subject: "Product Question",
+    status: "open",
+    channel: "chat",
+    assignee: null,
+    tags: [],
+    created_datetime: "2026-02-26T21:10:00Z",
+    messages: [
+      { id: 5035, sender: { type: "customer", name: "Chris Morgan" }, body_text: "Can I use my own Windows license or do I have to buy one through you guys?", created_datetime: "2026-02-26T21:10:00Z" },
+    ],
+  },
+
+  // ========================================
+  // REPORT ISSUE / TECHNICAL (3 tickets)
+  // ========================================
+  {
+    id: 253963210,
+    subject: "WIFI/LAN Driver Issues",
+    status: "open",
+    channel: "email",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["urgent"],
+    created_datetime: "2026-02-24T18:00:00Z",
+    messages: [
+      { id: 5040, sender: { type: "customer", name: "Kevin Wright" }, body_text: "Just received my Ironside build and the WiFi isn't working at all. Device Manager shows the network adapter with a yellow exclamation mark. I've tried restarting. Running Windows 11.", created_datetime: "2026-02-24T18:00:00Z" },
+      { id: 5041, sender: { type: "agent", name: "Spencer" }, body_text: "Hi Kevin! This is a known issue with fresh installs. Please download the latest WiFi/LAN drivers from your motherboard manufacturer's website. What motherboard model is in your build? You can find it in System Information. I'll send you the direct download link.", created_datetime: "2026-02-24T18:30:00Z" },
+      { id: 5042, sender: { type: "customer", name: "Kevin Wright" }, body_text: "It's an ASUS ROG STRIX B650E-E. But I can't download anything because I have no internet connection on this PC.", created_datetime: "2026-02-24T18:45:00Z" },
+    ],
+  },
+  {
+    id: 254532830,
+    subject: "Report Issue",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: ["urgent"],
+    created_datetime: "2026-02-26T12:00:00Z",
+    messages: [
+      { id: 5043, sender: { type: "customer", name: "Nathan Brooks" }, body_text: "My PC is leaking coolant from the AIO water cooler. There's liquid dripping onto my GPU. I've powered it off immediately. This is a brand new build received 3 days ago. Order #952100.", created_datetime: "2026-02-26T12:00:00Z" },
+    ],
+  },
+  {
+    id: 254165553,
+    subject: "Re: Report Issue",
+    status: "closed",
+    channel: "email",
+    assignee: "danni-jean@ironsidecomputers.com",
+    tags: ["urgent"],
+    created_datetime: "2026-02-25T10:00:00Z",
+    messages: [
+      { id: 5044, sender: { type: "customer", name: "Maria Garcia" }, body_text: "The RGB fans on my new build stopped working after 2 days. Everything else is fine. Order #952311.", created_datetime: "2026-02-25T10:00:00Z" },
+      { id: 5045, sender: { type: "agent", name: "Danni-Jean" }, body_text: "Hi Maria! Try this: 1) Open your BIOS (press DEL on startup), 2) Navigate to the RGB/LED settings, 3) Make sure 'Addressable RGB' is enabled. If that doesn't work, check if the RGB header cable is firmly seated on the motherboard. Let me know!", created_datetime: "2026-02-25T10:25:00Z" },
+      { id: 5046, sender: { type: "customer", name: "Maria Garcia" }, body_text: "The BIOS fix worked! Thank you so much!", created_datetime: "2026-02-25T11:00:00Z" },
+    ],
+  },
+
+  // ========================================
+  // RETURN / EXCHANGE (2 tickets)
+  // ========================================
+  {
+    id: 254125369,
+    subject: "Return Request",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: ["RETURN/EXCHANGE"],
+    created_datetime: "2026-02-26T09:15:00Z",
+    messages: [
+      { id: 5050, sender: { type: "customer", name: "Mike Turner" }, body_text: "I received my build last week but it's not performing like I expected for the price. I'd like to return it under your 30-day policy. Order #952467. What's the process?", created_datetime: "2026-02-26T09:15:00Z" },
+    ],
+  },
+  {
+    id: 253957813,
+    subject: "ORDER-CHANGE/CANCEL",
+    status: "closed",
+    channel: "email",
+    assignee: "danni-jean@ironsidecomputers.com",
+    tags: ["ORDER-CHANGE/CANCEL"],
+    created_datetime: "2026-02-22T16:00:00Z",
+    messages: [
+      { id: 5051, sender: { type: "customer", name: "Ashley Brown" }, body_text: "I need to cancel order #952051. I found a better deal elsewhere. It hasn't entered the build queue yet so it should be possible right?", created_datetime: "2026-02-22T16:00:00Z" },
+      { id: 5052, sender: { type: "agent", name: "Danni-Jean" }, body_text: "Hi Ashley, I've cancelled order #952051 for you. Since it hadn't entered the build queue, you'll receive a full refund within 5-7 business days to your original payment method. You'll get a confirmation email shortly.", created_datetime: "2026-02-22T16:30:00Z" },
+    ],
+  },
+
+  // ========================================
+  // CONTACT FORM SUBMISSIONS (2 real tickets)
+  // ========================================
+  {
+    id: 254942337,
+    subject: "New submission from Contact",
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: [],
+    created_datetime: "2026-02-26T20:00:00Z",
+    messages: [
+      { id: 5060, sender: { type: "customer", name: "Rachel Kim" }, body_text: "I'm interested in a bulk order of 10 gaming PCs for our esports team. Can someone from sales reach out? rachel@teamfrost.gg", created_datetime: "2026-02-26T20:00:00Z" },
+    ],
+  },
+  {
+    id: 253871727,
+    subject: "New submission from Contact",
+    status: "closed",
+    channel: "email",
+    assignee: "spencer@ironsidecomputers.com",
+    tags: ["csat-2week"],
+    created_datetime: "2026-02-23T07:30:00Z",
+    messages: [
+      { id: 5061, sender: { type: "customer", name: "Tom Harris" }, body_text: "Just wanted to say my Ironside Titan arrived and it's absolutely incredible. Best PC I've ever owned. Build quality is top notch.", created_datetime: "2026-02-23T07:30:00Z" },
+      { id: 5062, sender: { type: "agent", name: "Spencer" }, body_text: "Thanks so much Tom! We really appreciate the kind words. Enjoy your Titan! If you ever need anything, don't hesitate to reach out.", created_datetime: "2026-02-23T08:00:00Z" },
+    ],
+  },
+
+  // ========================================
+  // CSAT FOLLOW-UP (1 ticket)
+  // ========================================
+  {
+    id: 254011265,
+    subject: "Re: How's your new Ironside? (2-week check-in)",
+    status: "closed",
+    channel: "email",
+    assignee: "danni-jean@ironsidecomputers.com",
+    tags: ["csat-2week", "feedback", "positive"],
+    created_datetime: "2026-02-24T13:00:00Z",
+    messages: [
+      { id: 5070, sender: { type: "customer", name: "James Wilson" }, body_text: "Everything is running great! Getting 120+ FPS on Cyberpunk at max settings. Very happy with the purchase.", created_datetime: "2026-02-24T13:00:00Z" },
+      { id: 5071, sender: { type: "agent", name: "Danni-Jean" }, body_text: "Awesome to hear James! Those are great numbers. If you ever need help or have questions, we're here for you. Game on!", created_datetime: "2026-02-24T13:15:00Z" },
+    ],
+  },
+
+  // ========================================
+  // SPAM / NON-SUPPORT (10 tickets, all auto-closed)
+  // Mirrors real patterns: business loans, phishing, SEO, bulk hardware, unicode scams
+  // ========================================
+  {
+    id: 254549291,
+    subject: "Reminder: Business Funding Pre-Approval Closing",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-26T03:00:00Z",
+    messages: [
+      { id: 5080, sender: { type: "customer", name: "Capital Advance Group" }, body_text: "Your business has been pre-approved for up to $350,000 in working capital. Limited time offer. Click here to claim your funds before this offer expires.", created_datetime: "2026-02-26T03:00:00Z" },
+    ],
+  },
+  {
+    id: 254549290,
+    subject: "Final Chance for Fast, Easy Business Funding.",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-26T02:45:00Z",
+    messages: [
+      { id: 5081, sender: { type: "customer", name: "QuickFund Solutions" }, body_text: "Don't miss out on this opportunity. Get $50K-$500K deposited in as fast as 24 hours. No collateral needed.", created_datetime: "2026-02-26T02:45:00Z" },
+    ],
+  },
+  {
+    id: 254493246,
+    subject: "From Mr.Charles G.Stven REPLY ASAP",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-25T22:30:00Z",
+    messages: [
+      { id: 5082, sender: { type: "customer", name: "Mr. Charles G. Stven" }, body_text: "Dear Friend, I am Mr. Charles G. Stven, a senior banker. I have a business proposal worth $14.5M USD that requires your cooperation. Please reply for details.", created_datetime: "2026-02-25T22:30:00Z" },
+    ],
+  },
+  {
+    id: 254761427,
+    subject: "You have 4 message(s) in your quarantine inbox",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-26T06:00:00Z",
+    messages: [
+      { id: 5083, sender: { type: "customer", name: "Email Security Alert" }, body_text: "Action Required: You have 4 undelivered messages in quarantine. Click here to review and release them before they are permanently deleted.", created_datetime: "2026-02-26T06:00:00Z" },
+    ],
+  },
+  {
+    id: 253073657,
+    subject: "45x HP EliteDesk 800 G5 Mini-24.02.2026",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-24T04:00:00Z",
+    messages: [
+      { id: 5084, sender: { type: "customer", name: "IT Liquidators BV" }, body_text: "Dear Sir/Madam, We have 45x HP EliteDesk 800 G5 Mini available for immediate sale. Grade A refurbished. Please see attached price list.", created_datetime: "2026-02-24T04:00:00Z" },
+    ],
+  },
+  {
+    id: 254416849,
+    subject: "Steel products for your project needs",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-25T01:15:00Z",
+    messages: [
+      { id: 5085, sender: { type: "customer", name: "Jiangsu Steel Co." }, body_text: "Hello, we are a leading steel manufacturer. We offer competitive prices on stainless steel sheets, pipes, and fittings. MOQ: 5 tons. Please contact for quote.", created_datetime: "2026-02-25T01:15:00Z" },
+    ],
+  },
+  {
+    id: 254900488,
+    subject: "\u054Dр\u0581r\u0561\u0501\u0435 \u0545\u03BF\u057D\u0440 \u053E\u0561\u056C\u056C\u0435\u057F \u039D\u03BF\u0561",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-26T04:30:00Z",
+    messages: [
+      { id: 5086, sender: { type: "customer", name: "Crypto Wallet Service" }, body_text: "Your wallet requires immediate verification. Click the link below to secure your assets before access is revoked.", created_datetime: "2026-02-26T04:30:00Z" },
+    ],
+  },
+  {
+    id: 255083063,
+    subject: "Improper Use of Protected Audio in Media Content",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-27T02:00:00Z",
+    messages: [
+      { id: 5087, sender: { type: "customer", name: "Legal Notice Dept" }, body_text: "We have identified unauthorized use of copyrighted audio content on your website. Please review the attached cease and desist notice and respond within 48 hours.", created_datetime: "2026-02-27T02:00:00Z" },
+    ],
+  },
+  {
+    id: 255003357,
+    subject: "E-mail Account Notification For customerservice@ironsidecomputers.com !!!",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-27T01:00:00Z",
+    messages: [
+      { id: 5088, sender: { type: "customer", name: "Mail System Administrator" }, body_text: "Your email account storage is almost full. Click here to upgrade your storage to avoid losing incoming messages.", created_datetime: "2026-02-27T01:00:00Z" },
+    ],
+  },
+  {
+    id: 254610241,
+    subject: "2026 Annual Leave Compliance Report",
+    status: "closed",
+    channel: "email",
+    assignee: null,
+    tags: ["auto-close", "non-support-related"],
+    created_datetime: "2026-02-26T05:00:00Z",
+    messages: [
+      { id: 5089, sender: { type: "customer", name: "HR Compliance Team" }, body_text: "Please review and acknowledge your 2026 Annual Leave Compliance Report. Failure to respond within 24 hours may result in payroll adjustments.", created_datetime: "2026-02-26T05:00:00Z" },
+    ],
+  },
+
+  // ========================================
+  // GIVEAWAY (1 ticket — reflects Mackenzie's bulk sends)
+  // ========================================
+  {
+    id: 254493194,
+    subject: "Battlefield Giveaway Secret Codes",
+    status: "closed",
+    channel: "email",
+    assignee: "mackenzie@ironsidecomputers.com",
+    tags: ["PROMOTION"],
+    created_datetime: "2026-02-25T20:00:00Z",
+    messages: [
+      { id: 5090, sender: { type: "agent", name: "Mackenzie" }, body_text: "Congratulations! Here is your secret code for the Ironside x Battlefield giveaway: BF-IRON-X7K9M. Enter this code at ironsidecomputers.com/giveaway before March 15, 2026.", created_datetime: "2026-02-25T20:00:00Z" },
     ],
   },
 ];
@@ -189,8 +546,8 @@ export function searchMockTickets(filters: MockSearchFilters = {}): GorgiasTicke
 // --- Mock write operations (SW2) ---
 // These log what WOULD happen and mutate in-memory data for consistency.
 
-let nextTicketId = 1100;
-let nextMessageId = 3000;
+let nextTicketId = 255100000;
+let nextMessageId = 6000;
 
 function findTicketOrThrow(id: number): GorgiasTicket {
   const ticket = MOCK_TICKETS.find((t) => t.id === id);

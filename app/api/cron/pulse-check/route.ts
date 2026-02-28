@@ -7,11 +7,41 @@ import { HumanMessage } from "@langchain/core/messages";
 
 export const maxDuration = 60;
 
-const PULSE_CHECK_PROMPT = `Run a pulse check on our Gorgias support tickets.
-Use the sw3_analytics_insights tool to fetch and analyze current ticket data.
-Then provide a summary including: total tickets, open vs closed breakdown,
-average response time, busiest channels, and any concerning trends.
-Format the response for Slack (use bullet points and keep it concise).`;
+const PULSE_CHECK_PROMPT = `Run a support pulse check using the sw3_analytics_insights tool.
+
+Then produce a Slack-formatted operational briefing following these rules:
+
+1. SEPARATE spam from real support. Report spam count/rate, then focus analysis on real tickets only.
+2. For resolution times, only report P50 and P90 on real tickets (exclude auto-closed spam). If P50 is under 2 min, note that it's likely skewed by auto-responses.
+3. Show agent workload breakdown (who's handling what, close rates).
+4. List the top 3 recurring question categories with ticket counts.
+5. Flag any open tickets that appear urgent or overdue (especially order status tickets past the 15-20 day build window).
+6. Give exactly 3 SPECIFIC action items — not generic advice like "review filters." Name the ticket IDs, agent names, or specific patterns to address.
+7. Use this Slack format:
+
+:bar_chart: *Support Pulse Check*
+_[date range] • [total] tickets_
+
+*Status:* Open: X | Closed: Y
+*Spam:* Z tickets (N%) — auto-closed non-support
+*Real Support:* R tickets
+
+*Resolution (real tickets only):*
+Avg: X min • P50: Y min • P90: Z min (N tickets analyzed)
+
+*Top Questions:*
+1. "Category" — N tickets
+2. "Category" — N tickets
+3. "Category" — N tickets
+
+*Workload:*
+- Agent: N tickets (N% close rate)
+- Unassigned: N (N%)
+
+*:rotating_light: Action Items:*
+1. [Specific action with ticket IDs or agent names]
+2. [Specific action]
+3. [Specific action]`;
 
 const agent = createRouterAgent([sw3AnalyticsTool]);
 
@@ -45,7 +75,7 @@ export async function GET(request: Request) {
         channel: "cron",
         summary,
         ticketCount: null,
-        insights: { source: "cron", prompt: PULSE_CHECK_PROMPT },
+        insights: { source: "cron", prompt: "pulse-check-v2" },
         status: "completed",
       },
     });
