@@ -1,4 +1,4 @@
-import { parseGorgiasEvent } from "@/lib/gorgias/events";
+import { parseGorgiasEvent, parseHttpIntegrationEvent, parseEvent } from "@/lib/gorgias/events";
 
 describe("parseGorgiasEvent", () => {
   describe("ticket-message-created", () => {
@@ -202,5 +202,128 @@ describe("parseGorgiasEvent", () => {
       const entries = parseGorgiasEvent(payload);
       expect(entries).toHaveLength(0);
     });
+  });
+});
+
+// --- HTTP Integration format tests ---
+
+describe("parseHttpIntegrationEvent", () => {
+  it("logs ticket_created with assignee and category", () => {
+    const payload = {
+      event_type: "ticket-created",
+      ticket_id: "254414338",
+      subject: "Where is my order?",
+      status: "open",
+      assignee_email: "spencer@ironsidecomputers.com",
+      assignee_name: "Spencer",
+      customer_email: "john@gmail.com",
+      customer_name: "John",
+      tags: "order-status",
+      created_at: "2026-02-28T12:00:00Z",
+      updated_at: "2026-02-28T12:00:00Z",
+    };
+
+    const entries = parseHttpIntegrationEvent(payload);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].action).toBe("ticket_created");
+    expect(entries[0].agent).toBe("spencer@ironsidecomputers.com");
+    expect(entries[0].ticketId).toBe(254414338);
+    expect(entries[0].category).toBe("track_order");
+  });
+
+  it("logs update for ticket-updated events", () => {
+    const payload = {
+      event_type: "ticket-updated",
+      ticket_id: "12345",
+      subject: "Order Verification",
+      status: "closed",
+      assignee_email: "mackenzie@ironsidecomputers.com",
+      tags: "",
+      updated_at: "2026-02-28T19:00:00Z",
+    };
+
+    const entries = parseHttpIntegrationEvent(payload);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].action).toBe("update");
+    expect(entries[0].agent).toBe("mackenzie@ironsidecomputers.com");
+  });
+
+  it("logs message for ticket-message-created events", () => {
+    const payload = {
+      event_type: "ticket-message-created",
+      ticket_id: "12345",
+      subject: "Track Order #9001",
+      status: "open",
+      assignee_email: "spencer@ironsidecomputers.com",
+      last_message: "Hi, your order is in the build queue.",
+      tags: "order-status, vip",
+      updated_at: "2026-02-28T15:00:00Z",
+    };
+
+    const entries = parseHttpIntegrationEvent(payload);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].action).toBe("message");
+    expect(entries[0].responseText).toBe("Hi, your order is in the build queue.");
+    expect(entries[0].tagsApplied).toEqual(["order-status", "vip"]);
+  });
+
+  it("handles ticket_id as number", () => {
+    const payload = {
+      event_type: "ticket-created",
+      ticket_id: 99999,
+      subject: "Test",
+      assignee_email: "spencer@ironsidecomputers.com",
+    };
+
+    const entries = parseHttpIntegrationEvent(payload);
+    expect(entries[0].ticketId).toBe(99999);
+  });
+
+  it("handles empty/missing tags gracefully", () => {
+    const payload = {
+      event_type: "ticket-created",
+      ticket_id: "12345",
+      subject: "Test",
+      tags: "[]",
+    };
+
+    const entries = parseHttpIntegrationEvent(payload);
+    expect(entries[0].tagsApplied).toEqual([]);
+  });
+});
+
+// --- Unified parseEvent auto-detection ---
+
+describe("parseEvent", () => {
+  it("routes HTTP Integration payloads to parseHttpIntegrationEvent", () => {
+    const payload = {
+      event_type: "ticket-message-created",
+      ticket_id: "12345",
+      subject: "Test",
+      assignee_email: "spencer@ironsidecomputers.com",
+      last_message: "Hello",
+    };
+
+    const entries = parseEvent(payload);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].action).toBe("message");
+  });
+
+  it("routes native webhook payloads to parseGorgiasEvent", () => {
+    const payload = {
+      type: "ticket-created",
+      ticket_id: 12345,
+      ticket: {
+        id: 12345,
+        subject: "Where is my order?",
+        assignee_user: { email: "spencer@ironsidecomputers.com" },
+        tags: [{ name: "order-status" }],
+      },
+      created_datetime: "2026-02-28T12:00:00Z",
+    };
+
+    const entries = parseEvent(payload);
+    expect(entries).toHaveLength(1);
+    expect(entries[0].action).toBe("ticket_created");
   });
 });
