@@ -82,3 +82,39 @@ export async function fetchMacro(id: number): Promise<GorgiasMacro | undefined> 
   if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
   return (await res.json()) as GorgiasMacro;
 }
+
+// --- Events API (for historical backfill) ---
+
+export interface GorgiasEvent {
+  id: string;
+  type: string;
+  object_id: number;
+  object_type: string;
+  changes?: Record<string, { from: unknown; to: unknown }>;
+  user?: { email: string; first_name?: string };
+  created_datetime: string;
+  meta?: Record<string, unknown>;
+}
+
+export interface FetchEventsOptions {
+  cursor?: string;
+  limit?: number;
+  types?: string[];       // e.g. ["ticket-updated", "ticket-message-created"]
+  created_before?: string; // ISO date
+  created_after?: string;  // ISO date
+}
+
+export async function fetchEvents(options: FetchEventsOptions = {}): Promise<{ data: GorgiasEvent[]; meta: { next_cursor?: string } }> {
+  const params = new URLSearchParams();
+  if (options.limit) params.set("per_page", String(options.limit));
+  if (options.cursor) params.set("cursor", options.cursor);
+  if (options.types?.length) params.set("types", options.types.join(","));
+  if (options.created_before) params.set("created_before", options.created_before);
+  if (options.created_after) params.set("created_after", options.created_after);
+
+  const query = params.toString();
+  const url = `${getBaseUrl()}/api/events${query ? `?${query}` : ""}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error(`Gorgias Events API error: ${res.status} ${res.statusText}`);
+  return res.json();
+}
