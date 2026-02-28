@@ -8,7 +8,6 @@
 
 import { DynamicTool } from "@langchain/core/tools";
 import { getTicket, replyPublic, commentInternal, getMacros, getMacro } from "@/lib/gorgias/client";
-import type { GorgiasMacro } from "@/lib/gorgias/mock";
 
 interface Template {
   id: string;
@@ -246,7 +245,7 @@ export const sw5TemplateTool = new DynamicTool({
           const filled = fillTemplate(template, customerName);
 
           // Send public reply
-          const replyResult = await replyPublic(ticket.id, filled.body);
+          await replyPublic(ticket.id, filled.body);
 
           // Add internal note if template includes one
           let noteResult = null;

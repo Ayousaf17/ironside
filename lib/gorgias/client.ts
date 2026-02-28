@@ -10,76 +10,76 @@ import type { MockSearchFilters } from "./mock";
 import { fetchTickets, fetchTicket, searchTickets as fetchSearchTickets, fetchMacros, fetchMacro } from "./read";
 import * as write from "./write";
 
-function useMock(): boolean {
+function isMockMode(): boolean {
   return process.env.GORGIAS_MOCK !== "false";
 }
 
 export async function getTickets(): Promise<GorgiasTicket[]> {
-  if (useMock()) return getMockTickets();
+  if (isMockMode()) return getMockTickets();
   return fetchTickets();
 }
 
 export async function getTicket(id: number): Promise<GorgiasTicket | undefined> {
-  if (useMock()) return getMockTicket(id);
+  if (isMockMode()) return getMockTicket(id);
   return fetchTicket(id);
 }
 
 export async function searchTickets(filters: MockSearchFilters = {}): Promise<GorgiasTicket[]> {
-  if (useMock()) return searchMockTickets(filters);
+  if (isMockMode()) return searchMockTickets(filters);
   return fetchSearchTickets(filters);
 }
 
 // --- Write operations (SW2) ---
 
 export async function createTicket(data: { customer_email: string; subject: string; message: string }): Promise<object> {
-  if (useMock()) return mockCreateTicket(data);
+  if (isMockMode()) return mockCreateTicket(data);
   return write.createTicket(data);
 }
 
 export async function assignTicket(ticketId: number, assigneeEmail: string): Promise<object> {
-  if (useMock()) return mockAssignTicket(ticketId, assigneeEmail);
+  if (isMockMode()) return mockAssignTicket(ticketId, assigneeEmail);
   return write.assignTicket(ticketId, assigneeEmail);
 }
 
 export async function setPriority(ticketId: number, priority: string): Promise<object> {
-  if (useMock()) return mockSetPriority(ticketId, priority);
+  if (isMockMode()) return mockSetPriority(ticketId, priority);
   return write.setPriority(ticketId, priority);
 }
 
 export async function setStatus(ticketId: number, status: "open" | "closed"): Promise<object> {
-  if (useMock()) return mockSetStatus(ticketId, status);
+  if (isMockMode()) return mockSetStatus(ticketId, status);
   return write.setStatus(ticketId, status);
 }
 
 export async function updateTags(ticketId: number, tags: string[]): Promise<object> {
-  if (useMock()) return mockUpdateTags(ticketId, tags);
+  if (isMockMode()) return mockUpdateTags(ticketId, tags);
   return write.updateTags(ticketId, tags);
 }
 
 export async function replyPublic(ticketId: number, body: string): Promise<object> {
-  if (useMock()) return mockReplyPublic(ticketId, body);
+  if (isMockMode()) return mockReplyPublic(ticketId, body);
   return write.replyPublic(ticketId, body);
 }
 
 export async function commentInternal(ticketId: number, body: string): Promise<object> {
-  if (useMock()) return mockCommentInternal(ticketId, body);
+  if (isMockMode()) return mockCommentInternal(ticketId, body);
   return write.commentInternal(ticketId, body);
 }
 
 // --- Macros ---
 
 export async function getMacros(): Promise<GorgiasMacro[]> {
-  if (useMock()) return getMockMacros();
+  if (isMockMode()) return getMockMacros();
   return fetchMacros();
 }
 
 export async function getMacro(id: number): Promise<GorgiasMacro | undefined> {
-  if (useMock()) return getMockMacro(id);
+  if (isMockMode()) return getMockMacro(id);
   return fetchMacro(id);
 }
 
 export async function searchMacros(search?: string): Promise<GorgiasMacro[]> {
-  if (useMock()) return searchMockMacros(search);
+  if (isMockMode()) return searchMockMacros(search);
   // Real API: fetch all and filter client-side (Gorgias macros API has no search param)
   const all = await fetchMacros();
   if (!search) return all;
