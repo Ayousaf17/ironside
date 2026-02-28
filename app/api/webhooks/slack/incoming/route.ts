@@ -97,38 +97,42 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : "Unknown error";
     console.error("[slack/incoming] Error:", errorMessage);
 
-    // Log error to performance_metrics (replaces n8n "Log Error Performance Metrics" node)
-    await prisma.performanceMetric.create({
-      data: {
-        metric: "webhook_error",
-        value: 1,
-        unit: "count",
-        context: {
-          error: errorMessage,
+    try {
+      // Log error to performance_metrics (replaces n8n "Log Error Performance Metrics" node)
+      await prisma.performanceMetric.create({
+        data: {
+          metric: "webhook_error",
+          value: 1,
+          unit: "count",
+          context: {
+            error: errorMessage,
+            endpoint: "/webhooks/slack/incoming",
+            duration: Date.now() - startTime,
+          },
+        },
+      });
+
+      // Log failed request to api_logs
+      await prisma.apiLog.create({
+        data: {
           endpoint: "/webhooks/slack/incoming",
+          method: "POST",
+          status: 500,
+          request: body,
+          error: errorMessage,
           duration: Date.now() - startTime,
         },
-      },
-    });
+      });
 
-    // Log failed request to api_logs
-    await prisma.apiLog.create({
-      data: {
-        endpoint: "/webhooks/slack/incoming",
-        method: "POST",
-        status: 500,
-        request: body,
-        error: errorMessage,
-        duration: Date.now() - startTime,
-      },
-    });
-
-    // Send error to Slack (replaces n8n "Send Error to Slack" node)
-    const channel = body.event?.channel;
-    await sendSlackMessage(
-      `Error processing message: ${errorMessage}`,
-      channel
-    );
+      // Send error to Slack (replaces n8n "Send Error to Slack" node)
+      const channel = body.event?.channel;
+      await sendSlackMessage(
+        `Error processing message: ${errorMessage}`,
+        channel
+      );
+    } catch (logError) {
+      console.error("[slack/incoming] Error handler failed:", logError);
+    }
 
     return NextResponse.json({ ok: false, error: errorMessage }, { status: 500 });
   }
