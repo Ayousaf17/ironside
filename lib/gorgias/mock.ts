@@ -185,3 +185,80 @@ export function searchMockTickets(filters: MockSearchFilters = {}): GorgiasTicke
 
   return results;
 }
+
+// --- Mock write operations (SW2) ---
+// These log what WOULD happen and mutate in-memory data for consistency.
+
+let nextTicketId = 1100;
+let nextMessageId = 3000;
+
+function findTicketOrThrow(id: number): GorgiasTicket {
+  const ticket = MOCK_TICKETS.find((t) => t.id === id);
+  if (!ticket) throw new Error(`Mock ticket ${id} not found`);
+  return ticket;
+}
+
+export function mockCreateTicket(data: { customer_email: string; subject: string; message: string }): object {
+  const id = nextTicketId++;
+  const ticket: GorgiasTicket = {
+    id,
+    subject: data.subject,
+    status: "open",
+    channel: "email",
+    assignee: null,
+    tags: [],
+    created_datetime: new Date().toISOString(),
+    messages: [
+      { id: nextMessageId++, sender: { type: "customer", name: data.customer_email }, body_text: data.message, created_datetime: new Date().toISOString() },
+    ],
+  };
+  MOCK_TICKETS.push(ticket);
+  console.log(`[MOCK] Created ticket #${id}: "${data.subject}"`);
+  return { id, status: "created", ticket };
+}
+
+export function mockAssignTicket(ticketId: number, assigneeEmail: string): object {
+  const ticket = findTicketOrThrow(ticketId);
+  const previous = ticket.assignee;
+  ticket.assignee = assigneeEmail;
+  console.log(`[MOCK] Assigned ticket #${ticketId} to ${assigneeEmail} (was: ${previous ?? "unassigned"})`);
+  return { id: ticketId, assignee: assigneeEmail, status: "updated" };
+}
+
+export function mockSetPriority(ticketId: number, priority: string): object {
+  findTicketOrThrow(ticketId);
+  console.log(`[MOCK] Set priority on ticket #${ticketId} to "${priority}"`);
+  return { id: ticketId, priority, status: "updated" };
+}
+
+export function mockSetStatus(ticketId: number, status: "open" | "closed"): object {
+  const ticket = findTicketOrThrow(ticketId);
+  const previous = ticket.status;
+  ticket.status = status;
+  console.log(`[MOCK] Set status on ticket #${ticketId} to "${status}" (was: "${previous}")`);
+  return { id: ticketId, status, previous_status: previous };
+}
+
+export function mockUpdateTags(ticketId: number, tags: string[]): object {
+  const ticket = findTicketOrThrow(ticketId);
+  const previous = ticket.tags;
+  ticket.tags = tags;
+  console.log(`[MOCK] Updated tags on ticket #${ticketId}: [${tags.join(", ")}] (was: [${previous.join(", ")}])`);
+  return { id: ticketId, tags, previous_tags: previous };
+}
+
+export function mockReplyPublic(ticketId: number, body: string): object {
+  const ticket = findTicketOrThrow(ticketId);
+  const msg: GorgiasMessage = { id: nextMessageId++, sender: { type: "agent", name: "AI Agent" }, body_text: body, created_datetime: new Date().toISOString() };
+  ticket.messages.push(msg);
+  console.log(`[MOCK] Public reply on ticket #${ticketId}: "${body.slice(0, 80)}..."`);
+  return { id: msg.id, ticket_id: ticketId, type: "public_reply", status: "sent" };
+}
+
+export function mockCommentInternal(ticketId: number, body: string): object {
+  const ticket = findTicketOrThrow(ticketId);
+  const msg: GorgiasMessage = { id: nextMessageId++, sender: { type: "agent", name: "AI Agent (internal)" }, body_text: body, created_datetime: new Date().toISOString() };
+  ticket.messages.push(msg);
+  console.log(`[MOCK] Internal note on ticket #${ticketId}: "${body.slice(0, 80)}..."`);
+  return { id: msg.id, ticket_id: ticketId, type: "internal_note", status: "sent" };
+}
