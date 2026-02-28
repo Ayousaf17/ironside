@@ -155,3 +155,33 @@ export function getMockTickets(): GorgiasTicket[] {
 export function getMockTicket(id: number): GorgiasTicket | undefined {
   return MOCK_TICKETS.find((t) => t.id === id);
 }
+
+export interface MockSearchFilters {
+  status?: "open" | "closed";
+  search?: string;
+  limit?: number;
+}
+
+export function searchMockTickets(filters: MockSearchFilters = {}): GorgiasTicket[] {
+  let results = [...MOCK_TICKETS];
+
+  if (filters.status) {
+    results = results.filter((t) => t.status === filters.status);
+  }
+
+  if (filters.search) {
+    const term = filters.search.toLowerCase();
+    results = results.filter(
+      (t) =>
+        t.subject.toLowerCase().includes(term) ||
+        t.tags.some((tag) => tag.toLowerCase().includes(term)) ||
+        t.messages.some((m) => m.body_text.toLowerCase().includes(term))
+    );
+  }
+
+  if (filters.limit && filters.limit > 0) {
+    results = results.slice(0, filters.limit);
+  }
+
+  return results;
+}

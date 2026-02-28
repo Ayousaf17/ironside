@@ -2,6 +2,14 @@
 
 import type { GorgiasTicket } from "./mock";
 
+export interface TicketSearchFilters {
+  limit?: number;
+  order_by?: string;
+  cursor?: string;
+  status?: "open" | "closed";
+  search?: string;
+}
+
 function getAuthHeaders(): HeadersInit {
   const email = process.env.GORGIAS_EMAIL;
   const apiKey = process.env.GORGIAS_API_KEY;
@@ -30,4 +38,31 @@ export async function fetchTicket(id: number): Promise<GorgiasTicket | undefined
   if (res.status === 404) return undefined;
   if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
   return (await res.json()) as GorgiasTicket;
+}
+
+export async function searchTickets(filters: TicketSearchFilters = {}): Promise<GorgiasTicket[]> {
+  const params = new URLSearchParams();
+  if (filters.limit) params.set("limit", String(filters.limit));
+  if (filters.order_by) params.set("order_by", filters.order_by);
+  if (filters.cursor) params.set("cursor", filters.cursor);
+  if (filters.status) params.set("status", filters.status);
+
+  const query = params.toString();
+  const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
+  if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
+  const data = await res.json();
+  let tickets = data.data as GorgiasTicket[];
+
+  // Client-side text search (Gorgias list API doesn't have a text search param)
+  if (filters.search) {
+    const term = filters.search.toLowerCase();
+    tickets = tickets.filter(
+      (t) =>
+        t.subject.toLowerCase().includes(term) ||
+        t.tags.some((tag) => tag.toLowerCase().includes(term))
+    );
+  }
+
+  return tickets;
 }
