@@ -5,6 +5,8 @@ import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 
+export const maxDuration = 60;
+
 const PULSE_CHECK_PROMPT = `Run a pulse check on our Gorgias support tickets.
 Use the sw3_analytics_insights tool to fetch and analyze current ticket data.
 Then provide a summary including: total tickets, open vs closed breakdown,
