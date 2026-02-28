@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { fetchEvents, type GorgiasEvent } from "@/lib/gorgias/read";
-import { logBehaviorEntries, type BehaviorLogEntry } from "@/lib/gorgias/events";
+import { type BehaviorLogEntry } from "@/lib/gorgias/events";
 
 export const maxDuration = 60;
 

@@ -33,6 +33,7 @@ yarn-error.log*
 # env files (secrets never committed)
 .env*
 !.env.example
+!.env.test
 
 # vercel
 .vercel
