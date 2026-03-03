@@ -45,3 +45,69 @@ export function formatEscalationAlert(
 
   return lines.join("\n");
 }
+
+interface ApprovalData {
+  ticketId: number;
+  category: string;
+  confidence: number;
+  recommendedAction: string;
+  agentResponse: string;
+}
+
+export function formatApprovalBlocks(data: ApprovalData) {
+  const confidencePct = Math.round(data.confidence * 100);
+  const actionLabel = data.recommendedAction
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+
+  return [
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `:robot_face: *AI Recommendation — Ticket #${data.ticketId}*`,
+      },
+    },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Category:*\n\`${data.category}\`` },
+        { type: "mrkdwn", text: `*Confidence:*\n${confidencePct}%` },
+        { type: "mrkdwn", text: `*Action:*\n${actionLabel}` },
+      ],
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Agent Analysis:*\n${data.agentResponse.substring(0, 500)}`,
+      },
+    },
+    { type: "divider" },
+    {
+      type: "actions",
+      elements: [
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Approve", emoji: true },
+          style: "primary",
+          action_id: "approve_action",
+          value: JSON.stringify({
+            ticketId: data.ticketId,
+            action: data.recommendedAction,
+          }),
+        },
+        {
+          type: "button",
+          text: { type: "plain_text", text: "Reject", emoji: true },
+          style: "danger",
+          action_id: "reject_action",
+          value: JSON.stringify({
+            ticketId: data.ticketId,
+            action: data.recommendedAction,
+          }),
+        },
+      ],
+    },
+  ];
+}
