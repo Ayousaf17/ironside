@@ -39,6 +39,19 @@ jest.mock("@/lib/prisma", () => {
       create: jest.fn().mockResolvedValue({ id: "test-token-id" }),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    gorgiasUser: {
+      upsert: jest.fn().mockResolvedValue({ id: "test-user-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    dashboardConfig: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ id: "test-config-id" }),
+    },
+    conversationContext: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ id: "test-context-id" }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
     $disconnect: jest.fn(),
   };
   return { prisma: mockPrisma };
@@ -57,6 +70,9 @@ export function getPrismaMock() {
     agentToolCall: { create: jest.Mock };
     agentOutcome: { create: jest.Mock };
     aiTokenUsage: { create: jest.Mock; findMany: jest.Mock };
+    gorgiasUser: { upsert: jest.Mock; findMany: jest.Mock };
+    dashboardConfig: { findUnique: jest.Mock; upsert: jest.Mock };
+    conversationContext: { findUnique: jest.Mock; upsert: jest.Mock; deleteMany: jest.Mock };
     $disconnect: jest.Mock;
   };
 }

@@ -11,6 +11,10 @@
     {
       "path": "/api/cron/token-summary",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-gorgias-users",
+      "schedule": "0 5 * * *"
     }
   ]
 }

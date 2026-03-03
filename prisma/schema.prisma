@@ -7,15 +7,23 @@ datasource db {
 }
 
 model ApiLog {
-  id        String   @id @default(uuid())
-  endpoint  String
-  method    String
-  status    Int
-  request   Json?
-  response  Json?
-  error     String?
-  duration  Int?
-  createdAt DateTime @default(now()) @map("created_at")
+  id             String   @id @default(uuid())
+  endpoint       String
+  method         String
+  status         Int
+  request        Json?
+  response       Json?
+  error          String?
+  duration       Int?
+  actorUser      String?  @map("actor_user")
+  slackChannel   String?  @map("slack_channel")
+  slackThreadTs  String?  @map("slack_thread_ts")
+  ticketId       Int?     @map("ticket_id")
+  intent         String?
+  toolsUsed      String[] @map("tools_used")
+  sessionId      String?  @map("session_id")
+  tokenCount     Int?     @map("token_count")
+  createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("api_logs")
 }
@@ -26,20 +34,30 @@ model PerformanceMetric {
   value     Float
   unit      String?
   context   Json?
+  source    String?
+  sessionId String?  @map("session_id")
+  endpoint  String?
   createdAt DateTime @default(now()) @map("created_at")
 
   @@map("performance_metrics")
 }
 
 model PulseCheck {
-  id            String   @id @default(uuid())
-  channel       String?
-  summary       String
-  ticketCount   Int?     @map("ticket_count")
-  insights      Json?
-  rawAnalytics  Json?    @map("raw_analytics")
-  status        String   @default("completed")
-  createdAt     DateTime @default(now()) @map("created_at")
+  id               String   @id @default(uuid())
+  channel          String?
+  summary          String
+  ticketCount      Int?     @map("ticket_count")
+  insights         Json?
+  rawAnalytics     Json?    @map("raw_analytics")
+  status           String   @default("completed")
+  openTickets      Int?     @map("open_tickets")
+  closedTickets    Int?     @map("closed_tickets")
+  spamRate         Float?   @map("spam_rate")
+  avgResolutionMin Float?   @map("avg_resolution_min")
+  topCategory      String?  @map("top_category")
+  actionItems      Json?    @map("action_items")
+  sessionId        String?  @map("session_id")
+  createdAt        DateTime @default(now()) @map("created_at")
 
   @@map("pulse_checks")
 }
@@ -62,6 +80,13 @@ model AgentBehaviorLog {
   rawEvent             Json?    @map("raw_event")
   occurredAt           DateTime @map("occurred_at")
   createdAt            DateTime @default(now()) @map("created_at")
+
+  agentEmail        String?  @map("agent_email")
+  ticketChannel     String?  @map("ticket_channel")
+  ticketTags        String[] @map("ticket_tags")
+  responseCharCount Int?     @map("response_char_count")
+  messagePosition   Int?     @map("message_position")
+  isFirstResponse   Boolean? @map("is_first_response")
 
   @@index([agent])
   @@index([ticketId])
@@ -158,4 +183,47 @@ model AiTokenUsage {
   @@index([createdAt])
   @@index([source])
   @@map("ai_token_usage")
+}
+
+// --- Schema Enrichment (Phase 3) — New Tables ---
+
+model GorgiasUser {
+  id          String   @id @default(uuid())
+  gorgiasId   Int      @unique @map("gorgias_id")
+  email       String   @unique
+  firstName   String?  @map("first_name")
+  lastName    String?  @map("last_name")
+  role        String?
+  slackUserId String?  @map("slack_user_id")
+  isActive    Boolean  @default(true) @map("is_active")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("gorgias_users")
+}
+
+model DashboardConfig {
+  id        String   @id @default(uuid())
+  key       String   @unique
+  value     Json
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("dashboard_config")
+}
+
+model ConversationContext {
+  id                  String   @id @default(uuid())
+  slackThreadTs       String   @unique @map("slack_thread_ts")
+  slackChannel        String?  @map("slack_channel")
+  slackUserId         String?  @map("slack_user_id")
+  lastAction          String?  @map("last_action")
+  lastTicketIds       Int[]    @map("last_ticket_ids")
+  pendingConfirmation Json?    @map("pending_confirmation")
+  messageCount        Int      @default(0) @map("message_count")
+  expiresAt           DateTime @map("expires_at")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([expiresAt])
+  @@map("conversation_contexts")
 }

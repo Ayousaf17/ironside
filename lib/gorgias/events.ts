@@ -92,6 +92,13 @@ export interface BehaviorLogEntry {
   reopened: boolean;
   rawEvent: object;
   occurredAt: Date;
+  // Phase 3 enrichment fields
+  agentEmail?: string;
+  ticketChannel?: string;
+  ticketTags?: string[];
+  responseCharCount?: number;
+  messagePosition?: number;
+  isFirstResponse?: boolean;
 }
 
 // --- Detect payload format ---
@@ -134,13 +141,14 @@ export function parseHttpIntegrationEvent(payload: GorgiasHttpIntegrationPayload
         reopened: false,
         rawEvent: payload,
         occurredAt,
+        agentEmail: payload.assignee_email || undefined,
+        ticketChannel: payload.channel || undefined,
+        ticketTags: tags,
       });
       break;
     }
 
     case "ticket-updated": {
-      // HTTP Integration doesn't give us granular changes (what changed from/to).
-      // We log a generic "update" with the current snapshot of the ticket.
       entries.push({
         agent,
         action: "update",
@@ -151,14 +159,14 @@ export function parseHttpIntegrationEvent(payload: GorgiasHttpIntegrationPayload
         reopened: false,
         rawEvent: payload,
         occurredAt,
+        agentEmail: payload.assignee_email || undefined,
+        ticketChannel: payload.channel || undefined,
+        ticketTags: tags,
       });
       break;
     }
 
     case "ticket-message-created": {
-      // HTTP Integration gives us the last message text but no sender details.
-      // We log all messages — the assignee is the most likely agent who sent it.
-      // If the last message is empty, it was likely a customer action (no reply text).
       const messageText = payload.last_message || "";
       entries.push({
         agent,
@@ -171,6 +179,10 @@ export function parseHttpIntegrationEvent(payload: GorgiasHttpIntegrationPayload
         reopened: false,
         rawEvent: payload,
         occurredAt,
+        agentEmail: payload.assignee_email || undefined,
+        ticketChannel: payload.channel || undefined,
+        ticketTags: tags,
+        responseCharCount: messageText ? messageText.length : undefined,
       });
       break;
     }
@@ -202,6 +214,8 @@ export function parseGorgiasEvent(payload: GorgiasWebhookPayload): BehaviorLogEn
         reopened: false,
         rawEvent: payload,
         occurredAt,
+        agentEmail: payload.ticket?.assignee_user?.email || undefined,
+        ticketTags: tags,
       });
       break;
     }
@@ -282,6 +296,10 @@ export function parseGorgiasEvent(payload: GorgiasWebhookPayload): BehaviorLogEn
         reopened: false,
         rawEvent: payload,
         occurredAt,
+        agentEmail: msg.sender?.email || payload.ticket?.assignee_user?.email || undefined,
+        ticketChannel: msg.channel || undefined,
+        ticketTags: tags,
+        responseCharCount: msg.body_text ? msg.body_text.length : undefined,
       });
       break;
     }
