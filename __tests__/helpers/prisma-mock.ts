@@ -21,6 +21,20 @@ jest.mock("@/lib/prisma", () => {
       create: jest.fn().mockResolvedValue({ id: "test-id" }),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    agentSession: {
+      create: jest.fn().mockResolvedValue({ id: "test-session-id" }),
+      update: jest.fn().mockResolvedValue({ id: "test-session-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    agentRequest: {
+      create: jest.fn().mockResolvedValue({ id: "test-request-id" }),
+    },
+    agentToolCall: {
+      create: jest.fn().mockResolvedValue({ id: "test-tool-call-id" }),
+    },
+    agentOutcome: {
+      create: jest.fn().mockResolvedValue({ id: "test-outcome-id" }),
+    },
     $disconnect: jest.fn(),
   };
   return { prisma: mockPrisma };
@@ -34,6 +48,10 @@ export function getPrismaMock() {
     performanceMetric: { create: jest.Mock };
     pulseCheck: { create: jest.Mock };
     agentBehaviorLog: { create: jest.Mock; findMany: jest.Mock };
+    agentSession: { create: jest.Mock; update: jest.Mock; findMany: jest.Mock };
+    agentRequest: { create: jest.Mock };
+    agentToolCall: { create: jest.Mock };
+    agentOutcome: { create: jest.Mock };
     $disconnect: jest.Mock;
   };
 }

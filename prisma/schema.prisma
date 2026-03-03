@@ -69,3 +69,73 @@ model AgentBehaviorLog {
   @@index([occurredAt])
   @@map("agent_behavior_logs")
 }
+
+// --- Session Tracking Chain (Phase 1) ---
+
+model AgentSession {
+  id             String         @id @default(uuid())
+  slackChannel   String?        @map("slack_channel")
+  slackThreadTs  String?        @map("slack_thread_ts")
+  slackUserId    String?        @map("slack_user_id")
+  userMessage    String         @map("user_message")
+  status         String         @default("in_progress") // in_progress, completed, error
+  durationMs     Int?           @map("duration_ms")
+  createdAt      DateTime       @default(now()) @map("created_at")
+  updatedAt      DateTime       @updatedAt @map("updated_at")
+
+  requests       AgentRequest[]
+  outcome        AgentOutcome?
+
+  @@index([slackChannel])
+  @@index([slackUserId])
+  @@index([createdAt])
+  @@map("agent_sessions")
+}
+
+model AgentRequest {
+  id          String          @id @default(uuid())
+  sessionId   String          @map("session_id")
+  model       String
+  promptKey   String?         @map("prompt_key")
+  temperature Float?
+  maxTokens   Int?            @map("max_tokens")
+  createdAt   DateTime        @default(now()) @map("created_at")
+
+  session     AgentSession    @relation(fields: [sessionId], references: [id])
+  toolCalls   AgentToolCall[]
+
+  @@index([sessionId])
+  @@map("agent_requests")
+}
+
+model AgentToolCall {
+  id         String       @id @default(uuid())
+  requestId  String       @map("request_id")
+  toolName   String       @map("tool_name")
+  toolInput  Json?        @map("tool_input")
+  toolOutput Json?        @map("tool_output")
+  durationMs Int?         @map("duration_ms")
+  success    Boolean      @default(true)
+  error      String?
+  createdAt  DateTime     @default(now()) @map("created_at")
+
+  request    AgentRequest @relation(fields: [requestId], references: [id])
+
+  @@index([requestId])
+  @@index([toolName])
+  @@map("agent_tool_calls")
+}
+
+model AgentOutcome {
+  id        String       @id @default(uuid())
+  sessionId String       @unique @map("session_id")
+  success   Boolean      @default(true)
+  answer    String?
+  error     String?
+  toolsUsed String[]     @map("tools_used")
+  createdAt DateTime     @default(now()) @map("created_at")
+
+  session   AgentSession @relation(fields: [sessionId], references: [id])
+
+  @@map("agent_outcomes")
+}
