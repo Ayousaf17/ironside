@@ -1,38 +1,18 @@
-// Mock Prisma using relative path (Jest's module resolver doesn't support @/ aliases in jest.mock)
-jest.mock("../../lib/prisma", () => {
-  const mockPrisma = {
-    apiLog: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    performanceMetric: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-    },
-    pulseCheck: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-    },
-    agentBehaviorLog: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    $disconnect: jest.fn(),
-  };
-  return { prisma: mockPrisma };
-});
+// Mock the behavior service (replaces direct Prisma mocks)
+const mockLogBehaviorEntries = jest.fn().mockResolvedValue(1);
+jest.mock("../../lib/services/behavior.service", () => ({
+  logBehaviorEntries: (...args: unknown[]) => mockLogBehaviorEntries(...args),
+}));
+
+// Mock the logging service (replaces direct Prisma mocks)
+const mockLogApiCall = jest.fn().mockResolvedValue({ id: "test-id" });
+const mockLogApiError = jest.fn().mockResolvedValue({ id: "test-id" });
+jest.mock("../../lib/services/logging.service", () => ({
+  logApiCall: (...args: unknown[]) => mockLogApiCall(...args),
+  logApiError: (...args: unknown[]) => mockLogApiError(...args),
+}));
 
 import { POST, GET } from "@/app/api/webhooks/gorgias/events/route";
-
-function getPrismaMock() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { prisma } = require("../../lib/prisma");
-  return prisma as unknown as {
-    apiLog: { create: jest.Mock; findMany: jest.Mock };
-    performanceMetric: { create: jest.Mock };
-    pulseCheck: { create: jest.Mock };
-    agentBehaviorLog: { create: jest.Mock; findMany: jest.Mock };
-    $disconnect: jest.Mock;
-  };
-}
 
 function makeRequest(body: object): Request {
   return new Request("http://localhost:3001/api/webhooks/gorgias/events", {
@@ -44,13 +24,12 @@ function makeRequest(body: object): Request {
 
 describe("POST /api/webhooks/gorgias/events", () => {
   beforeEach(() => {
-    const mock = getPrismaMock();
-    mock.agentBehaviorLog.create.mockClear();
-    mock.apiLog.create.mockClear();
+    mockLogBehaviorEntries.mockClear();
+    mockLogApiCall.mockClear();
+    mockLogApiError.mockClear();
   });
 
   it("parses and logs an agent reply event", async () => {
-    const mock = getPrismaMock();
     const req = makeRequest({
       type: "ticket-message-created",
       ticket_id: 12345,
@@ -76,20 +55,19 @@ describe("POST /api/webhooks/gorgias/events", () => {
 
     expect(res.status).toBe(200);
     expect(json.logged).toBe(1);
-    expect(mock.agentBehaviorLog.create).toHaveBeenCalledTimes(1);
-    expect(mock.agentBehaviorLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
+    expect(mockLogBehaviorEntries).toHaveBeenCalledTimes(1);
+    expect(mockLogBehaviorEntries).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
           agent: "spencer@ironsidecomputers.com",
           action: "reply",
           ticketId: 12345,
         }),
-      })
+      ])
     );
   });
 
   it("silently acknowledges customer messages (no agent action)", async () => {
-    const mock = getPrismaMock();
     const req = makeRequest({
       type: "ticket-message-created",
       ticket_id: 12345,
@@ -109,11 +87,10 @@ describe("POST /api/webhooks/gorgias/events", () => {
     const json = await res.json();
 
     expect(json.logged).toBe(0);
-    expect(mock.agentBehaviorLog.create).not.toHaveBeenCalled();
+    expect(mockLogBehaviorEntries).not.toHaveBeenCalled();
   });
 
   it("parses and logs an HTTP Integration event (flat format)", async () => {
-    const mock = getPrismaMock();
     const req = makeRequest({
       event_type: "ticket-message-created",
       ticket_id: "254414338",
@@ -131,15 +108,15 @@ describe("POST /api/webhooks/gorgias/events", () => {
 
     expect(res.status).toBe(200);
     expect(json.logged).toBe(1);
-    expect(mock.agentBehaviorLog.create).toHaveBeenCalledTimes(1);
-    expect(mock.agentBehaviorLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
+    expect(mockLogBehaviorEntries).toHaveBeenCalledTimes(1);
+    expect(mockLogBehaviorEntries).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({
           agent: "spencer@ironsidecomputers.com",
           action: "message",
           ticketId: 254414338,
         }),
-      })
+      ])
     );
   });
 

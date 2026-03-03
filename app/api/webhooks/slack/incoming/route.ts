@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
-import { prisma } from "@/lib/prisma";
+import { logApiCall, logApiError, logWebhookError } from "@/lib/services/logging.service";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sw1ReaderTool } from "@/lib/langchain/tools/sw1-reader";
@@ -90,15 +90,13 @@ export async function POST(request: NextRequest) {
     await sendSlackMessage(responseText, channel);
 
     // Log to api_logs (replaces n8n Supabase "Log to api_logs" node)
-    await prisma.apiLog.create({
-      data: {
-        endpoint: "/webhooks/slack/incoming",
-        method: "POST",
-        status: 200,
-        request: body,
-        response: { text: responseText },
-        duration: Date.now() - startTime,
-      },
+    await logApiCall({
+      endpoint: "/webhooks/slack/incoming",
+      method: "POST",
+      status: 200,
+      request: body,
+      response: { text: responseText },
+      duration: Date.now() - startTime,
     });
 
     return NextResponse.json({ ok: true, response: responseText });
@@ -109,29 +107,19 @@ export async function POST(request: NextRequest) {
 
     try {
       // Log error to performance_metrics (replaces n8n "Log Error Performance Metrics" node)
-      await prisma.performanceMetric.create({
-        data: {
-          metric: "webhook_error",
-          value: 1,
-          unit: "count",
-          context: {
-            error: errorMessage,
-            endpoint: "/webhooks/slack/incoming",
-            duration: Date.now() - startTime,
-          },
-        },
+      await logWebhookError({
+        endpoint: "/webhooks/slack/incoming",
+        error: errorMessage,
+        duration: Date.now() - startTime,
       });
 
       // Log failed request to api_logs
-      await prisma.apiLog.create({
-        data: {
-          endpoint: "/webhooks/slack/incoming",
-          method: "POST",
-          status: 500,
-          request: body,
-          error: errorMessage,
-          duration: Date.now() - startTime,
-        },
+      await logApiError({
+        endpoint: "/webhooks/slack/incoming",
+        method: "POST",
+        request: body,
+        error: errorMessage,
+        duration: Date.now() - startTime,
       });
 
       // Send error to Slack (replaces n8n "Send Error to Slack" node)

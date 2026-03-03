@@ -1,5 +1,9 @@
-// Mocks the Prisma client for unit tests that don't need a real DB.
-// Usage: import { getPrismaMock } from "../helpers/prisma-mock";
+// Mocks the repo layer for unit tests that don't need a real DB.
+// Route handlers now use services/repos instead of Prisma directly.
+// Individual test files mock the specific services they need.
+//
+// This shared helper mocks the underlying Prisma client for any test
+// that still needs it (e.g., testing repo functions themselves).
 
 jest.mock("@/lib/prisma", () => {
   const mockPrisma = {
@@ -22,7 +26,6 @@ jest.mock("@/lib/prisma", () => {
   return { prisma: mockPrisma };
 });
 
-// Re-export the mocked prisma for test assertions
 export function getPrismaMock() {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { prisma } = require("@/lib/prisma");

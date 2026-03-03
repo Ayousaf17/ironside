@@ -9,8 +9,9 @@
 //   Events: ticket-created, ticket-updated, ticket-message-created
 
 import { NextResponse } from "next/server";
-import { parseEvent, logBehaviorEntries } from "@/lib/gorgias/events";
-import { prisma } from "@/lib/prisma";
+import { parseEvent } from "@/lib/gorgias/events";
+import { logBehaviorEntries } from "@/lib/services/behavior.service";
+import { logApiCall, logApiError } from "@/lib/services/logging.service";
 
 export const maxDuration = 30;
 
@@ -29,15 +30,13 @@ export async function POST(request: Request) {
 
     if (entries.length === 0) {
       // Event type we don't track (e.g., customer message) — acknowledge silently
-      await prisma.apiLog.create({
-        data: {
-          endpoint: "/api/webhooks/gorgias/events",
-          method: "POST",
-          status: 200,
-          request: { type: eventType, ticket_id: payload.ticket_id },
-          response: { skipped: true, reason: "no_agent_action" },
-          duration: Date.now() - startTime,
-        },
+      await logApiCall({
+        endpoint: "/api/webhooks/gorgias/events",
+        method: "POST",
+        status: 200,
+        request: { type: eventType, ticket_id: payload.ticket_id },
+        response: { skipped: true, reason: "no_agent_action" },
+        duration: Date.now() - startTime,
       });
       return NextResponse.json({ ok: true, logged: 0 });
     }
@@ -46,15 +45,13 @@ export async function POST(request: Request) {
     const count = await logBehaviorEntries(entries);
 
     // Log the API call
-    await prisma.apiLog.create({
-      data: {
-        endpoint: "/api/webhooks/gorgias/events",
-        method: "POST",
-        status: 200,
-        request: { type: eventType, ticket_id: payload.ticket_id },
-        response: { logged: count, actions: entries.map(e => e.action) },
-        duration: Date.now() - startTime,
-      },
+    await logApiCall({
+      endpoint: "/api/webhooks/gorgias/events",
+      method: "POST",
+      status: 200,
+      request: { type: eventType, ticket_id: payload.ticket_id },
+      response: { logged: count, actions: entries.map(e => e.action) },
+      duration: Date.now() - startTime,
     });
 
     console.log(`[gorgias-webhook] Logged ${count} behavior entries for ticket ${payload.ticket_id}`);
@@ -65,14 +62,11 @@ export async function POST(request: Request) {
     console.error(`[gorgias-webhook] Error:`, message);
 
     try {
-      await prisma.apiLog.create({
-        data: {
-          endpoint: "/api/webhooks/gorgias/events",
-          method: "POST",
-          status: 500,
-          error: message,
-          duration: Date.now() - startTime,
-        },
+      await logApiError({
+        endpoint: "/api/webhooks/gorgias/events",
+        method: "POST",
+        error: message,
+        duration: Date.now() - startTime,
       });
     } catch {
       // Don't let logging failure mask the original error

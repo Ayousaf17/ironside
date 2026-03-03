@@ -100,17 +100,19 @@ export interface FetchEventsOptions {
   cursor?: string;
   limit?: number;
   types?: string[];       // e.g. ["ticket-updated", "ticket-message-created"]
-  created_before?: string; // ISO date
-  created_after?: string;  // ISO date
 }
 
 export async function fetchEvents(options: FetchEventsOptions = {}): Promise<{ data: GorgiasEvent[]; meta: { next_cursor?: string } }> {
   const params = new URLSearchParams();
-  if (options.limit) params.set("per_page", String(options.limit));
+  if (options.limit) params.set("limit", String(options.limit));
   if (options.cursor) params.set("cursor", options.cursor);
-  if (options.types?.length) params.set("types", options.types.join(","));
-  if (options.created_before) params.set("created_before", options.created_before);
-  if (options.created_after) params.set("created_after", options.created_after);
+  // Gorgias Events API requires separate params per type (not comma-separated)
+  if (options.types?.length) {
+    for (const type of options.types) {
+      params.append("types", type);
+    }
+  }
+  // Note: Gorgias Events API has no date filter — filtering is done client-side via cursor pagination
 
   const query = params.toString();
   const url = `${getBaseUrl()}/api/events${query ? `?${query}` : ""}`;

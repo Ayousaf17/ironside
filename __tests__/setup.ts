@@ -1,3 +1,1 @@
-// Global test setup — loads test environment variables
-import dotenv from "dotenv";
-dotenv.config({ path: ".env.test" });
+// Global test setup — env vars are loaded in jest.config.ts via dotenv
