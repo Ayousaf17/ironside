@@ -227,3 +227,28 @@ model ConversationContext {
   @@index([expiresAt])
   @@map("conversation_contexts")
 }
+
+// --- Ticket Analytics + Confidence Scoring (Phase 5) ---
+
+model TicketAnalytics {
+  id                  String   @id @default(uuid())
+  ticketId            Int      @unique @map("ticket_id")
+  category            String?
+  aiConfidenceScore   Float?   @map("ai_confidence_score")
+  aiClassification    String?  @map("ai_classification")
+  humanClassification String?  @map("human_classification")
+  aiMatchesHuman      Boolean? @map("ai_matches_human")
+  aiMessageCount      Int?     @map("ai_message_count")
+  humanMessageCount   Int?     @map("human_message_count")
+  resolutionTimeMin   Float?   @map("resolution_time_min")
+  costSavingsUsd      Float?   @map("cost_savings_usd")
+  touchCount          Int?     @map("touch_count")
+  wasReopened         Boolean  @default(false) @map("was_reopened")
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([aiConfidenceScore])
+  @@index([aiMatchesHuman])
+  @@map("ticket_analytics")
+}

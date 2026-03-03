@@ -52,6 +52,10 @@ jest.mock("@/lib/prisma", () => {
       upsert: jest.fn().mockResolvedValue({ id: "test-context-id" }),
       deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
     },
+    ticketAnalytics: {
+      upsert: jest.fn().mockResolvedValue({ id: "test-analytics-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $disconnect: jest.fn(),
   };
   return { prisma: mockPrisma };
@@ -73,6 +77,7 @@ export function getPrismaMock() {
     gorgiasUser: { upsert: jest.Mock; findMany: jest.Mock };
     dashboardConfig: { findUnique: jest.Mock; upsert: jest.Mock };
     conversationContext: { findUnique: jest.Mock; upsert: jest.Mock; deleteMany: jest.Mock };
+    ticketAnalytics: { upsert: jest.Mock; findMany: jest.Mock };
     $disconnect: jest.Mock;
   };
 }
