@@ -13,6 +13,8 @@ import { HumanMessage } from "@langchain/core/messages";
 import { startSession, endSession } from "@/lib/services/session.service";
 import { wrapToolsWithLogging } from "@/lib/langchain/tool-wrapper";
 import { logTokenUsage } from "@/lib/services/token.service";
+import { getThreadContext, updateThreadContext, buildContextMessages } from "@/lib/services/context.service";
+import { SystemMessage } from "@langchain/core/messages";
 
 export const maxDuration = 60;
 
@@ -104,10 +106,25 @@ export async function POST(request: NextRequest) {
       : baseTools;
     const agent = createRouterAgent(tools);
 
+    // Load conversation context for multi-turn support
+    const messages: (SystemMessage | HumanMessage)[] = [];
+    if (threadTs) {
+      try {
+        const ctx = await getThreadContext(threadTs);
+        if (ctx) {
+          const contextMsg = buildContextMessages(ctx);
+          if (contextMsg) {
+            messages.push(new SystemMessage(contextMsg));
+          }
+        }
+      } catch (err) {
+        console.error("[slack/incoming] Failed to load context:", err);
+      }
+    }
+    messages.push(new HumanMessage(text));
+
     // Run the LangChain router agent
-    const result = await agent.invoke({
-      messages: [new HumanMessage(text)],
-    });
+    const result = await agent.invoke({ messages });
 
     const lastMessage = result.messages[result.messages.length - 1];
     const responseText =
@@ -120,6 +137,37 @@ export async function POST(request: NextRequest) {
       .filter((m: { getType?: () => string }) => m.getType?.() === "tool")
       .map((m: { name?: string }) => m.name || "unknown")
       .filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i);
+
+    // Save conversation context for multi-turn support
+    if (threadTs) {
+      // Extract ticket IDs mentioned in tool outputs
+      const ticketIds: number[] = [];
+      for (const m of result.messages) {
+        if (m.getType?.() === "tool") {
+          try {
+            const parsed = JSON.parse(typeof m.content === "string" ? m.content : "{}");
+            if (parsed.ticket?.id) ticketIds.push(parsed.ticket.id);
+            if (parsed.tickets) {
+              for (const t of parsed.tickets) {
+                if (t.id) ticketIds.push(t.id);
+              }
+            }
+          } catch { /* not JSON, skip */ }
+        }
+      }
+      const uniqueTicketIds = [...new Set(ticketIds)];
+
+      updateThreadContext({
+        slackThreadTs: threadTs,
+        slackChannel: channel,
+        slackUserId,
+        lastAction: toolsUsed[0] || "chat",
+        lastTicketIds: uniqueTicketIds.length > 0 ? uniqueTicketIds : undefined,
+        incrementMessageCount: true,
+      }).catch((err) =>
+        console.error("[slack/incoming] Failed to save context:", err)
+      );
+    }
 
     // Log token usage from LLM responses
     const aiMessages = result.messages.filter(
@@ -141,8 +189,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Send response to Slack
-    await sendSlackMessage(responseText, channel);
+    // Send response to Slack (reply in-thread if message was in a thread)
+    await sendSlackMessage(responseText, channel, threadTs);
 
     // End session tracking (success)
     if (sessionId) {
@@ -203,7 +251,8 @@ export async function POST(request: NextRequest) {
 
       await sendSlackMessage(
         `Error processing message: ${errorMessage}`,
-        channel
+        channel,
+        threadTs
       );
     } catch (logError) {
       console.error("[slack/incoming] Error handler failed:", logError);

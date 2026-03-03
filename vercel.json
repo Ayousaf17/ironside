@@ -15,6 +15,10 @@
     {
       "path": "/api/cron/sync-gorgias-users",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-context",
+      "schedule": "0 */6 * * *"
     }
   ]
 }
