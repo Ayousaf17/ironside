@@ -12,6 +12,7 @@ import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 import { startSession, endSession } from "@/lib/services/session.service";
 import { wrapToolsWithLogging } from "@/lib/langchain/tool-wrapper";
+import { logTokenUsage } from "@/lib/services/token.service";
 
 export const maxDuration = 60;
 
@@ -119,6 +120,26 @@ export async function POST(request: NextRequest) {
       .filter((m: { getType?: () => string }) => m.getType?.() === "tool")
       .map((m: { name?: string }) => m.name || "unknown")
       .filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i);
+
+    // Log token usage from LLM responses
+    const aiMessages = result.messages.filter(
+      (m: { getType?: () => string }) => m.getType?.() === "ai"
+    );
+    for (const msg of aiMessages) {
+      const usage = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }).usage_metadata;
+      if (usage?.input_tokens || usage?.output_tokens) {
+        logTokenUsage({
+          sessionId,
+          requestId,
+          model: AGENT_MODEL,
+          promptTokens: usage.input_tokens || 0,
+          completionTokens: usage.output_tokens || 0,
+          source: "slack",
+        }).catch((err) =>
+          console.error("[slack/incoming] Failed to log tokens:", err)
+        );
+      }
+    }
 
     // Send response to Slack
     await sendSlackMessage(responseText, channel);

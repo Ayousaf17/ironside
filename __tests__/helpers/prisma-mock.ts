@@ -35,6 +35,10 @@ jest.mock("@/lib/prisma", () => {
     agentOutcome: {
       create: jest.fn().mockResolvedValue({ id: "test-outcome-id" }),
     },
+    aiTokenUsage: {
+      create: jest.fn().mockResolvedValue({ id: "test-token-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $disconnect: jest.fn(),
   };
   return { prisma: mockPrisma };
@@ -52,6 +56,7 @@ export function getPrismaMock() {
     agentRequest: { create: jest.Mock };
     agentToolCall: { create: jest.Mock };
     agentOutcome: { create: jest.Mock };
+    aiTokenUsage: { create: jest.Mock; findMany: jest.Mock };
     $disconnect: jest.Mock;
   };
 }

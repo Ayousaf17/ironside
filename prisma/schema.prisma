@@ -139,3 +139,23 @@ model AgentOutcome {
 
   @@map("agent_outcomes")
 }
+
+// --- Token Tracking + Cost Visibility (Phase 2) ---
+
+model AiTokenUsage {
+  id               String   @id @default(uuid())
+  sessionId        String?  @map("session_id")
+  requestId        String?  @map("request_id")
+  model            String
+  promptTokens     Int      @map("prompt_tokens")
+  completionTokens Int      @map("completion_tokens")
+  totalTokens      Int      @map("total_tokens")
+  costUsd          Float    @map("cost_usd")
+  source           String   // slack, cron
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId])
+  @@index([createdAt])
+  @@index([source])
+  @@map("ai_token_usage")
+}
