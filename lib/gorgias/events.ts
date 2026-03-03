@@ -8,8 +8,6 @@
 //
 // n8n equivalent: a Webhook node → Switch node → multiple Set nodes extracting fields.
 
-import { prisma } from "@/lib/prisma";
-
 // --- Gorgias webhook payload types ---
 
 // Native webhook format (from Gorgias Webhooks API — not currently used)
@@ -301,28 +299,3 @@ export function parseEvent(payload: Record<string, unknown>): BehaviorLogEntry[]
   return parseGorgiasEvent(payload as unknown as GorgiasWebhookPayload);
 }
 
-// --- Write parsed entries to database ---
-
-export async function logBehaviorEntries(entries: BehaviorLogEntry[]): Promise<number> {
-  let count = 0;
-  for (const entry of entries) {
-    await prisma.agentBehaviorLog.create({
-      data: {
-        gorgiasEventId: entry.gorgiasEventId,
-        agent: entry.agent,
-        action: entry.action,
-        ticketId: entry.ticketId,
-        ticketSubject: entry.ticketSubject,
-        category: entry.category,
-        responseText: entry.responseText,
-        macroIdUsed: entry.macroIdUsed,
-        tagsApplied: entry.tagsApplied,
-        reopened: entry.reopened,
-        rawEvent: entry.rawEvent as object,
-        occurredAt: entry.occurredAt,
-      },
-    });
-    count++;
-  }
-  return count;
-}

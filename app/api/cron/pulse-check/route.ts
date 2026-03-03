@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { createPulseCheck } from "@/lib/repos/pulse-check.repo";
+import { logCronError } from "@/lib/services/logging.service";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sendSlackMessage } from "@/lib/slack/client";
@@ -70,14 +71,12 @@ export async function GET(request: Request) {
     await sendSlackMessage(summary);
 
     // Log to pulse_checks table
-    await prisma.pulseCheck.create({
-      data: {
-        channel: "cron",
-        summary,
-        ticketCount: null,
-        insights: { source: "cron", prompt: "pulse-check-v2" },
-        status: "completed",
-      },
+    await createPulseCheck({
+      channel: "cron",
+      summary,
+      ticketCount: null,
+      insights: { source: "cron", prompt: "pulse-check-v2" },
+      status: "completed",
     });
 
     return NextResponse.json({ ok: true, summary });
@@ -87,13 +86,9 @@ export async function GET(request: Request) {
     console.error("[cron/pulse-check] Error:", errorMessage);
 
     // Log error to performance_metrics
-    await prisma.performanceMetric.create({
-      data: {
-        metric: "cron_pulse_check_error",
-        value: 1,
-        unit: "count",
-        context: { error: errorMessage },
-      },
+    await logCronError({
+      metric: "cron_pulse_check_error",
+      error: errorMessage,
     });
 
     // Send error notification to Slack

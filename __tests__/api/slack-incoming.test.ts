@@ -41,27 +41,15 @@ jest.mock("../../lib/slack/client", () => ({
   sendSlackMessage: jest.fn().mockResolvedValue(undefined),
 }));
 
-// Mock Prisma
-jest.mock("../../lib/prisma", () => {
-  const mockPrisma = {
-    apiLog: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    performanceMetric: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-    },
-    pulseCheck: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-    },
-    agentBehaviorLog: {
-      create: jest.fn().mockResolvedValue({ id: "test-id" }),
-      findMany: jest.fn().mockResolvedValue([]),
-    },
-    $disconnect: jest.fn(),
-  };
-  return { prisma: mockPrisma };
-});
+// Mock the logging service (replaces direct Prisma mocks)
+const mockLogApiCall = jest.fn().mockResolvedValue({ id: "test-id" });
+const mockLogApiError = jest.fn().mockResolvedValue({ id: "test-id" });
+const mockLogWebhookError = jest.fn().mockResolvedValue({ id: "test-id" });
+jest.mock("../../lib/services/logging.service", () => ({
+  logApiCall: (...args: unknown[]) => mockLogApiCall(...args),
+  logApiError: (...args: unknown[]) => mockLogApiError(...args),
+  logWebhookError: (...args: unknown[]) => mockLogWebhookError(...args),
+}));
 
 // Mock HumanMessage from langchain
 jest.mock("@langchain/core/messages", () => ({
@@ -87,22 +75,11 @@ function makeRequest(
   return req;
 }
 
-// Re-export the mocked prisma for test assertions
-function getPrismaMock() {
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { prisma } = require("../../lib/prisma");
-  return prisma as {
-    apiLog: { create: jest.Mock; findMany: jest.Mock };
-    performanceMetric: { create: jest.Mock };
-    $disconnect: jest.Mock;
-  };
-}
-
 describe("POST /api/webhooks/slack/incoming", () => {
   beforeEach(() => {
-    const mock = getPrismaMock();
-    mock.apiLog.create.mockClear();
-    mock.performanceMetric.create.mockClear();
+    mockLogApiCall.mockClear();
+    mockLogApiError.mockClear();
+    mockLogWebhookError.mockClear();
   });
 
   it("responds to Slack URL verification challenge", async () => {

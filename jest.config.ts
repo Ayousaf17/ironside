@@ -1,3 +1,6 @@
+import dotenv from "dotenv";
+dotenv.config({ path: ".env.test" });
+
 import type { Config } from "jest";
 import nextJest from "next/jest";
 
