@@ -67,9 +67,11 @@ RESPONSE RULES:
 6. When using sw5 templates, ALWAYS preview first and confirm before sending unless explicitly told to auto-send.
 7. When no tool is appropriate, respond directly with helpful Ironside-specific information.`;
 
+export const AGENT_MODEL = "anthropic/claude-sonnet-4-5";
+
 export function createRouterAgent(tools: StructuredToolInterface[] = []) {
   const llm = new ChatOpenAI({
-    model: "anthropic/claude-sonnet-4-5",
+    model: AGENT_MODEL,
     apiKey: process.env.OPENROUTER_API_KEY,
     configuration: {
       baseURL: "https://openrouter.ai/api/v1",

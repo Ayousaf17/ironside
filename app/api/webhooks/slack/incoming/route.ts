@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { logApiCall, logApiError, logWebhookError } from "@/lib/services/logging.service";
-import { createRouterAgent } from "@/lib/langchain/router-agent";
+import { createRouterAgent, AGENT_MODEL } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sw1ReaderTool } from "@/lib/langchain/tools/sw1-reader";
 import { sw2WriterTool } from "@/lib/langchain/tools/sw2-writer";
@@ -10,17 +10,22 @@ import { sw5TemplateTool } from "@/lib/langchain/tools/sw5-templates";
 import { sw6EscalationTool } from "@/lib/langchain/tools/sw6-escalation";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
+import { startSession, endSession } from "@/lib/services/session.service";
+import { wrapToolsWithLogging } from "@/lib/langchain/tool-wrapper";
+import { logTokenUsage } from "@/lib/services/token.service";
+import { getThreadContext, updateThreadContext, buildContextMessages } from "@/lib/services/context.service";
+import { SystemMessage } from "@langchain/core/messages";
 
 export const maxDuration = 60;
 
-const agent = createRouterAgent([
+const baseTools = [
   sw1ReaderTool,
   sw2WriterTool,
   sw3AnalyticsTool,
   sw4TriageTool,
   sw5TemplateTool,
   sw6EscalationTool,
-]);
+];
 
 function verifySlackSignature(rawBody: string, request: NextRequest): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
@@ -73,11 +78,53 @@ export async function POST(request: NextRequest) {
 
   console.log("[slack/incoming]", text);
 
+  const channel = body.event?.channel;
+  const threadTs = body.event?.thread_ts || body.event?.ts;
+  const slackUserId = body.event?.user;
+
+  // Start session tracking
+  let sessionId: string | undefined;
+  let requestId: string | undefined;
   try {
-    // Run the LangChain router agent
-    const result = await agent.invoke({
-      messages: [new HumanMessage(text)],
+    const session = await startSession({
+      slackChannel: channel,
+      slackThreadTs: threadTs,
+      slackUserId,
+      userMessage: text,
+      model: AGENT_MODEL,
     });
+    sessionId = session.sessionId;
+    requestId = session.requestId;
+  } catch (err) {
+    console.error("[slack/incoming] Failed to create session:", err);
+  }
+
+  try {
+    // Wrap tools with logging if we have a requestId
+    const tools = requestId
+      ? wrapToolsWithLogging(baseTools, requestId)
+      : baseTools;
+    const agent = createRouterAgent(tools);
+
+    // Load conversation context for multi-turn support
+    const messages: (SystemMessage | HumanMessage)[] = [];
+    if (threadTs) {
+      try {
+        const ctx = await getThreadContext(threadTs);
+        if (ctx) {
+          const contextMsg = buildContextMessages(ctx);
+          if (contextMsg) {
+            messages.push(new SystemMessage(contextMsg));
+          }
+        }
+      } catch (err) {
+        console.error("[slack/incoming] Failed to load context:", err);
+      }
+    }
+    messages.push(new HumanMessage(text));
+
+    // Run the LangChain router agent
+    const result = await agent.invoke({ messages });
 
     const lastMessage = result.messages[result.messages.length - 1];
     const responseText =
@@ -85,11 +132,80 @@ export async function POST(request: NextRequest) {
         ? lastMessage.content
         : JSON.stringify(lastMessage.content);
 
-    // Send response to Slack (replaces n8n "Send Slack Message" node)
-    const channel = body.event?.channel;
-    await sendSlackMessage(responseText, channel);
+    // Collect tool names used from the agent's message history
+    const toolsUsed = result.messages
+      .filter((m: { getType?: () => string }) => m.getType?.() === "tool")
+      .map((m: { name?: string }) => m.name || "unknown")
+      .filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i);
 
-    // Log to api_logs (replaces n8n Supabase "Log to api_logs" node)
+    // Save conversation context for multi-turn support
+    if (threadTs) {
+      // Extract ticket IDs mentioned in tool outputs
+      const ticketIds: number[] = [];
+      for (const m of result.messages) {
+        if (m.getType?.() === "tool") {
+          try {
+            const parsed = JSON.parse(typeof m.content === "string" ? m.content : "{}");
+            if (parsed.ticket?.id) ticketIds.push(parsed.ticket.id);
+            if (parsed.tickets) {
+              for (const t of parsed.tickets) {
+                if (t.id) ticketIds.push(t.id);
+              }
+            }
+          } catch { /* not JSON, skip */ }
+        }
+      }
+      const uniqueTicketIds = [...new Set(ticketIds)];
+
+      updateThreadContext({
+        slackThreadTs: threadTs,
+        slackChannel: channel,
+        slackUserId,
+        lastAction: toolsUsed[0] || "chat",
+        lastTicketIds: uniqueTicketIds.length > 0 ? uniqueTicketIds : undefined,
+        incrementMessageCount: true,
+      }).catch((err) =>
+        console.error("[slack/incoming] Failed to save context:", err)
+      );
+    }
+
+    // Log token usage from LLM responses
+    const aiMessages = result.messages.filter(
+      (m: { getType?: () => string }) => m.getType?.() === "ai"
+    );
+    for (const msg of aiMessages) {
+      const usage = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }).usage_metadata;
+      if (usage?.input_tokens || usage?.output_tokens) {
+        logTokenUsage({
+          sessionId,
+          requestId,
+          model: AGENT_MODEL,
+          promptTokens: usage.input_tokens || 0,
+          completionTokens: usage.output_tokens || 0,
+          source: "slack",
+        }).catch((err) =>
+          console.error("[slack/incoming] Failed to log tokens:", err)
+        );
+      }
+    }
+
+    // Send response to Slack (reply in-thread if message was in a thread)
+    await sendSlackMessage(responseText, channel, threadTs);
+
+    // End session tracking (success)
+    if (sessionId) {
+      endSession({
+        sessionId,
+        startTime,
+        success: true,
+        answer: responseText,
+        toolsUsed,
+      }).catch((err) =>
+        console.error("[slack/incoming] Failed to end session:", err)
+      );
+    }
+
+    // Log to api_logs
     await logApiCall({
       endpoint: "/webhooks/slack/incoming",
       method: "POST",
@@ -105,15 +221,26 @@ export async function POST(request: NextRequest) {
       error instanceof Error ? error.message : "Unknown error";
     console.error("[slack/incoming] Error:", errorMessage);
 
+    // End session tracking (error)
+    if (sessionId) {
+      endSession({
+        sessionId,
+        startTime,
+        success: false,
+        error: errorMessage,
+        toolsUsed: [],
+      }).catch((err) =>
+        console.error("[slack/incoming] Failed to end session:", err)
+      );
+    }
+
     try {
-      // Log error to performance_metrics (replaces n8n "Log Error Performance Metrics" node)
       await logWebhookError({
         endpoint: "/webhooks/slack/incoming",
         error: errorMessage,
         duration: Date.now() - startTime,
       });
 
-      // Log failed request to api_logs
       await logApiError({
         endpoint: "/webhooks/slack/incoming",
         method: "POST",
@@ -122,11 +249,10 @@ export async function POST(request: NextRequest) {
         duration: Date.now() - startTime,
       });
 
-      // Send error to Slack (replaces n8n "Send Error to Slack" node)
-      const channel = body.event?.channel;
       await sendSlackMessage(
         `Error processing message: ${errorMessage}`,
-        channel
+        channel,
+        threadTs
       );
     } catch (logError) {
       console.error("[slack/incoming] Error handler failed:", logError);

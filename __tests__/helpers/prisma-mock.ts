@@ -21,6 +21,41 @@ jest.mock("@/lib/prisma", () => {
       create: jest.fn().mockResolvedValue({ id: "test-id" }),
       findMany: jest.fn().mockResolvedValue([]),
     },
+    agentSession: {
+      create: jest.fn().mockResolvedValue({ id: "test-session-id" }),
+      update: jest.fn().mockResolvedValue({ id: "test-session-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    agentRequest: {
+      create: jest.fn().mockResolvedValue({ id: "test-request-id" }),
+    },
+    agentToolCall: {
+      create: jest.fn().mockResolvedValue({ id: "test-tool-call-id" }),
+    },
+    agentOutcome: {
+      create: jest.fn().mockResolvedValue({ id: "test-outcome-id" }),
+    },
+    aiTokenUsage: {
+      create: jest.fn().mockResolvedValue({ id: "test-token-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    gorgiasUser: {
+      upsert: jest.fn().mockResolvedValue({ id: "test-user-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    dashboardConfig: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ id: "test-config-id" }),
+    },
+    conversationContext: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      upsert: jest.fn().mockResolvedValue({ id: "test-context-id" }),
+      deleteMany: jest.fn().mockResolvedValue({ count: 0 }),
+    },
+    ticketAnalytics: {
+      upsert: jest.fn().mockResolvedValue({ id: "test-analytics-id" }),
+      findMany: jest.fn().mockResolvedValue([]),
+    },
     $disconnect: jest.fn(),
   };
   return { prisma: mockPrisma };
@@ -34,6 +69,15 @@ export function getPrismaMock() {
     performanceMetric: { create: jest.Mock };
     pulseCheck: { create: jest.Mock };
     agentBehaviorLog: { create: jest.Mock; findMany: jest.Mock };
+    agentSession: { create: jest.Mock; update: jest.Mock; findMany: jest.Mock };
+    agentRequest: { create: jest.Mock };
+    agentToolCall: { create: jest.Mock };
+    agentOutcome: { create: jest.Mock };
+    aiTokenUsage: { create: jest.Mock; findMany: jest.Mock };
+    gorgiasUser: { upsert: jest.Mock; findMany: jest.Mock };
+    dashboardConfig: { findUnique: jest.Mock; upsert: jest.Mock };
+    conversationContext: { findUnique: jest.Mock; upsert: jest.Mock; deleteMany: jest.Mock };
+    ticketAnalytics: { upsert: jest.Mock; findMany: jest.Mock };
     $disconnect: jest.Mock;
   };
 }

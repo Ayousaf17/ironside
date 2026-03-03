@@ -7,6 +7,22 @@
     {
       "path": "/api/cron/backfill-behavior",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/token-summary",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/sync-gorgias-users",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-context",
+      "schedule": "0 */6 * * *"
+    },
+    {
+      "path": "/api/cron/backtest-confidence",
+      "schedule": "0 3 * * *"
     }
   ]
 }
