@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/pulse-check",
       "schedule": "0 14 * * *"
+    },
+    {
+      "path": "/api/cron/backfill-behavior",
+      "schedule": "0 6 * * *"
     }
   ]
 }
