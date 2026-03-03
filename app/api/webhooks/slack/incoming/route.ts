@@ -8,13 +8,15 @@ import { sw2WriterTool } from "@/lib/langchain/tools/sw2-writer";
 import { sw4TriageTool } from "@/lib/langchain/tools/sw4-triage";
 import { sw5TemplateTool } from "@/lib/langchain/tools/sw5-templates";
 import { sw6EscalationTool } from "@/lib/langchain/tools/sw6-escalation";
-import { sendSlackMessage } from "@/lib/slack/client";
+import { sendSlackMessage, sendSlackBlocks } from "@/lib/slack/client";
 import { HumanMessage } from "@langchain/core/messages";
 import { startSession, endSession } from "@/lib/services/session.service";
 import { wrapToolsWithLogging } from "@/lib/langchain/tool-wrapper";
 import { logTokenUsage } from "@/lib/services/token.service";
 import { getThreadContext, updateThreadContext, buildContextMessages } from "@/lib/services/context.service";
 import { SystemMessage } from "@langchain/core/messages";
+import { getCategoryTier, createApprovalRequest } from "@/lib/services/approval.service";
+import { formatApprovalBlocks } from "@/lib/slack/formatters";
 
 export const maxDuration = 60;
 
@@ -189,8 +191,61 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Check for Tier 2 HITL: if agent used auto_route/classify_ticket,
+    // check category tier and send approval request instead of auto-executing
+    let hitlSent = false;
+    if (threadTs) {
+      for (const m of result.messages) {
+        if (m.getType?.() !== "tool" || m.name !== "sw4_auto_triage") continue;
+        try {
+          const parsed = JSON.parse(
+            typeof m.content === "string" ? m.content : "{}"
+          );
+          const category = parsed.classification?.category;
+          const ticketId = parsed.ticket_id;
+          if (category && ticketId && parsed.actions_taken) {
+            const tier = await getCategoryTier(category);
+            if (tier === "T2") {
+              const confidence = parsed.classification?.suggestedPriority === "critical" ? 0.95 : 0.85;
+              const action = category === "spam" ? "close_as_spam" :
+                parsed.classification?.suggestedAgent?.includes("spencer") ? "assign_spencer" : "assign_danni";
+
+              await createApprovalRequest({
+                ticketId,
+                category,
+                confidence,
+                recommendedAction: action,
+                agentResponse: responseText,
+                slackChannel: channel,
+                slackThreadTs: threadTs,
+              });
+
+              const blocks = formatApprovalBlocks({
+                ticketId,
+                category,
+                confidence,
+                recommendedAction: action,
+                agentResponse: responseText,
+              });
+
+              await sendSlackBlocks(
+                `AI recommendation for ticket #${ticketId}`,
+                blocks,
+                channel,
+                threadTs
+              );
+              hitlSent = true;
+              break;
+            }
+          }
+        } catch { /* not parseable, skip */ }
+      }
+    }
+
     // Send response to Slack (reply in-thread if message was in a thread)
-    await sendSlackMessage(responseText, channel, threadTs);
+    if (!hitlSent) {
+      await sendSlackMessage(responseText, channel, threadTs);
+    }
 
     // End session tracking (success)
     if (sessionId) {
