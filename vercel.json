@@ -30,7 +30,7 @@
     },
     {
       "path": "/api/cron/weekly-behavior-report",
-      "schedule": "0 14 * * 1"
+      "schedule": "0 14 * * *"
     }
   ]
 }

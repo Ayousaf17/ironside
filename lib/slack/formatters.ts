@@ -10,11 +10,6 @@ interface BehaviorLog {
   isFirstResponse: boolean | null;
 }
 
-interface TokenRecord {
-  totalTokens: number;
-  costUsd: number;
-}
-
 interface TicketAnalyticsRecord {
   category: string | null;
   aiConfidenceScore: number | null;
@@ -22,7 +17,6 @@ interface TicketAnalyticsRecord {
 
 interface WeeklyReportData {
   behaviorLogs: BehaviorLog[];
-  tokenUsage: TokenRecord[];
   ticketAnalytics: TicketAnalyticsRecord[];
   startDate: Date;
   endDate: Date;
@@ -35,8 +29,7 @@ function formatDateRange(start: Date, end: Date): string {
 }
 
 export function formatWeeklyBehaviorReport(data: WeeklyReportData): string {
-  const { behaviorLogs, tokenUsage, ticketAnalytics, startDate, endDate } =
-    data;
+  const { behaviorLogs, ticketAnalytics, startDate, endDate } = data;
 
   if (behaviorLogs.length === 0) {
     return `:bar_chart: *Weekly Agent Behavior Report* — ${formatDateRange(startDate, endDate)}\n\nNo activity recorded this week.`;
@@ -112,11 +105,6 @@ export function formatWeeklyBehaviorReport(data: WeeklyReportData): string {
     .sort((a, b) => b[1] - a[1])
     .slice(0, 5);
 
-  // AI cost
-  const totalCalls = tokenUsage.length;
-  const totalTokens = tokenUsage.reduce((sum, t) => sum + t.totalTokens, 0);
-  const totalCost = tokenUsage.reduce((sum, t) => sum + t.costUsd, 0);
-
   // Tier readiness
   const categoryConfidence = new Map<string, number[]>();
   for (const ta of ticketAnalytics) {
@@ -167,12 +155,6 @@ export function formatWeeklyBehaviorReport(data: WeeklyReportData): string {
       lines.push(`  ${name} (${count}x)`);
     }
   }
-
-  // AI cost section
-  lines.push(
-    "",
-    `*AI Cost:* $${totalCost.toFixed(2)} (${totalCalls} calls, ${totalTokens >= 1000 ? `${Math.round(totalTokens / 1000)}K` : totalTokens} tokens)`
-  );
 
   // Tier readiness section
   if (tierLines.length > 0) {
