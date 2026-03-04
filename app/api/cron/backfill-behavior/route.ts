@@ -13,6 +13,7 @@ import { backfillBehaviorBatch } from "@/lib/services/behavior.service";
 import { logApiCall } from "@/lib/services/logging.service";
 import { fetchEvents, type GorgiasEvent } from "@/lib/gorgias/read";
 import { type BehaviorLogEntry } from "@/lib/gorgias/events";
+import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 
 export const maxDuration = 60;
 
@@ -90,6 +91,16 @@ async function runBackfill(after?: string, _before?: string, maxPages = 50): Pro
     }
 
     if (entries.length > 0) {
+      // Enrich each entry with full ticket data (rate-limit safe: ~500ms between calls)
+      for (let j = 0; j < entries.length; j++) {
+        try {
+          entries[j] = await enrichBehaviorEntry(entries[j]);
+          if (j < entries.length - 1) await new Promise(r => setTimeout(r, 500));
+        } catch {
+          // Enrichment failed for this entry — continue with raw data
+        }
+      }
+
       // Batch insert, skipping duplicates (gorgiasEventId is unique)
       const inserted = await backfillBehaviorBatch(entries);
       totalLogged += inserted;

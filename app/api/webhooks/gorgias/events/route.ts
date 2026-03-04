@@ -10,6 +10,7 @@
 
 import { NextResponse } from "next/server";
 import { parseEvent } from "@/lib/gorgias/events";
+import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
 import { logApiCall, logApiError } from "@/lib/services/logging.service";
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     console.log(`[gorgias-webhook] Received event: ${eventType} for ticket ${payload.ticket_id}`);
 
     // Parse the event — auto-detects HTTP Integration vs native webhook format
-    const entries = parseEvent(payload);
+    let entries = parseEvent(payload);
 
     if (entries.length === 0) {
       // Event type we don't track (e.g., customer message) — acknowledge silently
@@ -39,6 +40,15 @@ export async function POST(request: Request) {
         duration: Date.now() - startTime,
       });
       return NextResponse.json({ ok: true, logged: 0 });
+    }
+
+    // Enrich entries with full ticket data from Gorgias API (graceful degradation)
+    if (process.env.GORGIAS_MOCK === "false") {
+      try {
+        entries = await Promise.all(entries.map(e => enrichBehaviorEntry(e)));
+      } catch (enrichErr) {
+        console.warn("[gorgias-webhook] Enrichment failed, logging raw entries:", enrichErr);
+      }
     }
 
     // Write behavior logs to database

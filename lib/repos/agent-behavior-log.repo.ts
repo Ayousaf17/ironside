@@ -28,6 +28,7 @@ function entryToData(entry: BehaviorLogEntry) {
     category: entry.category,
     responseText: entry.responseText,
     macroIdUsed: entry.macroIdUsed,
+    macroName: entry.macroName,
     tagsApplied: entry.tagsApplied,
     reopened: entry.reopened,
     rawEvent: entry.rawEvent as object,
@@ -38,6 +39,8 @@ function entryToData(entry: BehaviorLogEntry) {
     responseCharCount: entry.responseCharCount,
     messagePosition: entry.messagePosition,
     isFirstResponse: entry.isFirstResponse,
+    timeToRespondMin: entry.timeToRespondMin,
+    touchesToResolution: entry.touchesToResolution,
   };
 }
 

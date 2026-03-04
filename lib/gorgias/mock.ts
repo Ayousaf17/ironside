@@ -13,6 +13,8 @@ export interface GorgiasMessage {
   sender: { type: "customer" | "agent"; name: string };
   body_text: string;
   created_datetime: string;
+  channel?: string;
+  meta?: { macro_id?: number };
 }
 
 export interface GorgiasTicket {
