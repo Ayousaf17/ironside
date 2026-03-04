@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { after } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { logApiCall, logApiError, logWebhookError } from "@/lib/services/logging.service";
 import { createRouterAgent, AGENT_MODEL } from "@/lib/langchain/router-agent";
@@ -62,7 +63,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
   }
 
-  // Ignore Slack retries (Slack resends if response takes >3s)
+  // Ignore Slack retries (safety net — after() should prevent retries)
   if (request.headers.get("x-slack-retry-num")) {
     return NextResponse.json({ ok: true, ignored: "retry" });
   }
@@ -78,241 +79,241 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, ignored: "empty_message" });
   }
 
-  console.log("[slack/incoming]", text);
-
   const channel = body.event?.channel;
   const threadTs = body.event?.thread_ts || body.event?.ts;
   const slackUserId = body.event?.user;
 
-  // Start session tracking
-  let sessionId: string | undefined;
-  let requestId: string | undefined;
-  try {
-    const session = await startSession({
-      slackChannel: channel,
-      slackThreadTs: threadTs,
-      slackUserId,
-      userMessage: text,
-      model: AGENT_MODEL,
-    });
-    sessionId = session.sessionId;
-    requestId = session.requestId;
-  } catch (err) {
-    console.error("[slack/incoming] Failed to create session:", err);
-  }
+  // Respond 200 immediately so Slack doesn't retry.
+  // Process the LLM call in the background using after().
+  after(async () => {
+    console.log("[slack/incoming]", text);
 
-  try {
-    // Wrap tools with logging if we have a requestId
-    const tools = requestId
-      ? wrapToolsWithLogging(baseTools, requestId)
-      : baseTools;
-    const agent = createRouterAgent(tools);
-
-    // Load conversation context for multi-turn support
-    const messages: (SystemMessage | HumanMessage)[] = [];
-    if (threadTs) {
-      try {
-        const ctx = await getThreadContext(threadTs);
-        if (ctx) {
-          const contextMsg = buildContextMessages(ctx);
-          if (contextMsg) {
-            messages.push(new SystemMessage(contextMsg));
-          }
-        }
-      } catch (err) {
-        console.error("[slack/incoming] Failed to load context:", err);
-      }
-    }
-    messages.push(new HumanMessage(text));
-
-    // Run the LangChain router agent
-    const result = await agent.invoke({ messages });
-
-    const lastMessage = result.messages[result.messages.length - 1];
-    const responseText =
-      typeof lastMessage.content === "string"
-        ? lastMessage.content
-        : JSON.stringify(lastMessage.content);
-
-    // Collect tool names used from the agent's message history
-    const toolsUsed = result.messages
-      .filter((m: { getType?: () => string }) => m.getType?.() === "tool")
-      .map((m: { name?: string }) => m.name || "unknown")
-      .filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i);
-
-    // Save conversation context for multi-turn support
-    if (threadTs) {
-      // Extract ticket IDs mentioned in tool outputs
-      const ticketIds: number[] = [];
-      for (const m of result.messages) {
-        if (m.getType?.() === "tool") {
-          try {
-            const parsed = JSON.parse(typeof m.content === "string" ? m.content : "{}");
-            if (parsed.ticket?.id) ticketIds.push(parsed.ticket.id);
-            if (parsed.tickets) {
-              for (const t of parsed.tickets) {
-                if (t.id) ticketIds.push(t.id);
-              }
-            }
-          } catch { /* not JSON, skip */ }
-        }
-      }
-      const uniqueTicketIds = [...new Set(ticketIds)];
-
-      updateThreadContext({
-        slackThreadTs: threadTs,
+    // Start session tracking
+    let sessionId: string | undefined;
+    let requestId: string | undefined;
+    try {
+      const session = await startSession({
         slackChannel: channel,
+        slackThreadTs: threadTs,
         slackUserId,
-        lastAction: toolsUsed[0] || "chat",
-        lastTicketIds: uniqueTicketIds.length > 0 ? uniqueTicketIds : undefined,
-        incrementMessageCount: true,
-      }).catch((err) =>
-        console.error("[slack/incoming] Failed to save context:", err)
-      );
-    }
-
-    // Log token usage from LLM responses
-    const aiMessages = result.messages.filter(
-      (m: { getType?: () => string }) => m.getType?.() === "ai"
-    );
-    for (const msg of aiMessages) {
-      const usage = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }).usage_metadata;
-      if (usage?.input_tokens || usage?.output_tokens) {
-        logTokenUsage({
-          sessionId,
-          requestId,
-          model: AGENT_MODEL,
-          promptTokens: usage.input_tokens || 0,
-          completionTokens: usage.output_tokens || 0,
-          source: "slack",
-        }).catch((err) =>
-          console.error("[slack/incoming] Failed to log tokens:", err)
-        );
-      }
-    }
-
-    // Check for Tier 2 HITL: if agent used auto_route/classify_ticket,
-    // check category tier and send approval request instead of auto-executing
-    let hitlSent = false;
-    if (threadTs) {
-      for (const m of result.messages) {
-        if (m.getType?.() !== "tool" || m.name !== "sw4_auto_triage") continue;
-        try {
-          const parsed = JSON.parse(
-            typeof m.content === "string" ? m.content : "{}"
-          );
-          const category = parsed.classification?.category;
-          const ticketId = parsed.ticket_id;
-          if (category && ticketId && parsed.actions_taken) {
-            const tier = await getCategoryTier(category);
-            if (tier === "T2") {
-              const confidence = parsed.classification?.suggestedPriority === "critical" ? 0.95 : 0.85;
-              const action = category === "spam" ? "close_as_spam" :
-                parsed.classification?.suggestedAgent?.includes("spencer") ? "assign_spencer" : "assign_danni";
-
-              await createApprovalRequest({
-                ticketId,
-                category,
-                confidence,
-                recommendedAction: action,
-                agentResponse: responseText,
-                slackChannel: channel,
-                slackThreadTs: threadTs,
-              });
-
-              const blocks = formatApprovalBlocks({
-                ticketId,
-                category,
-                confidence,
-                recommendedAction: action,
-                agentResponse: responseText,
-              });
-
-              await sendSlackBlocks(
-                `AI recommendation for ticket #${ticketId}`,
-                blocks,
-                channel,
-                threadTs
-              );
-              hitlSent = true;
-              break;
-            }
-          }
-        } catch { /* not parseable, skip */ }
-      }
-    }
-
-    // Send response to Slack (reply in-thread if message was in a thread)
-    if (!hitlSent) {
-      await sendSlackMessage(responseText, channel, threadTs);
-    }
-
-    // End session tracking (success)
-    if (sessionId) {
-      endSession({
-        sessionId,
-        startTime,
-        success: true,
-        answer: responseText,
-        toolsUsed,
-      }).catch((err) =>
-        console.error("[slack/incoming] Failed to end session:", err)
-      );
-    }
-
-    // Log to api_logs
-    await logApiCall({
-      endpoint: "/webhooks/slack/incoming",
-      method: "POST",
-      status: 200,
-      request: body,
-      response: { text: responseText },
-      duration: Date.now() - startTime,
-    });
-
-    return NextResponse.json({ ok: true, response: responseText });
-  } catch (error) {
-    const errorMessage =
-      error instanceof Error ? error.message : "Unknown error";
-    console.error("[slack/incoming] Error:", errorMessage);
-
-    // End session tracking (error)
-    if (sessionId) {
-      endSession({
-        sessionId,
-        startTime,
-        success: false,
-        error: errorMessage,
-        toolsUsed: [],
-      }).catch((err) =>
-        console.error("[slack/incoming] Failed to end session:", err)
-      );
+        userMessage: text,
+        model: AGENT_MODEL,
+      });
+      sessionId = session.sessionId;
+      requestId = session.requestId;
+    } catch (err) {
+      console.error("[slack/incoming] Failed to create session:", err);
     }
 
     try {
-      await logWebhookError({
-        endpoint: "/webhooks/slack/incoming",
-        error: errorMessage,
-        duration: Date.now() - startTime,
-      });
+      // Wrap tools with logging if we have a requestId
+      const tools = requestId
+        ? wrapToolsWithLogging(baseTools, requestId)
+        : baseTools;
+      const agent = createRouterAgent(tools);
 
-      await logApiError({
+      // Load conversation context for multi-turn support
+      const messages: (SystemMessage | HumanMessage)[] = [];
+      if (threadTs) {
+        try {
+          const ctx = await getThreadContext(threadTs);
+          if (ctx) {
+            const contextMsg = buildContextMessages(ctx);
+            if (contextMsg) {
+              messages.push(new SystemMessage(contextMsg));
+            }
+          }
+        } catch (err) {
+          console.error("[slack/incoming] Failed to load context:", err);
+        }
+      }
+      messages.push(new HumanMessage(text));
+
+      // Run the LangChain router agent
+      const result = await agent.invoke({ messages });
+
+      const lastMessage = result.messages[result.messages.length - 1];
+      const responseText =
+        typeof lastMessage.content === "string"
+          ? lastMessage.content
+          : JSON.stringify(lastMessage.content);
+
+      // Collect tool names used from the agent's message history
+      const toolsUsed = result.messages
+        .filter((m: { getType?: () => string }) => m.getType?.() === "tool")
+        .map((m: { name?: string }) => m.name || "unknown")
+        .filter((name: string, i: number, arr: string[]) => arr.indexOf(name) === i);
+
+      // Save conversation context for multi-turn support
+      if (threadTs) {
+        const ticketIds: number[] = [];
+        for (const m of result.messages) {
+          if (m.getType?.() === "tool") {
+            try {
+              const parsed = JSON.parse(typeof m.content === "string" ? m.content : "{}");
+              if (parsed.ticket?.id) ticketIds.push(parsed.ticket.id);
+              if (parsed.tickets) {
+                for (const t of parsed.tickets) {
+                  if (t.id) ticketIds.push(t.id);
+                }
+              }
+            } catch { /* not JSON, skip */ }
+          }
+        }
+        const uniqueTicketIds = [...new Set(ticketIds)];
+
+        updateThreadContext({
+          slackThreadTs: threadTs,
+          slackChannel: channel,
+          slackUserId,
+          lastAction: toolsUsed[0] || "chat",
+          lastTicketIds: uniqueTicketIds.length > 0 ? uniqueTicketIds : undefined,
+          incrementMessageCount: true,
+        }).catch((err) =>
+          console.error("[slack/incoming] Failed to save context:", err)
+        );
+      }
+
+      // Log token usage from LLM responses
+      const aiMessages = result.messages.filter(
+        (m: { getType?: () => string }) => m.getType?.() === "ai"
+      );
+      for (const msg of aiMessages) {
+        const usage = (msg as { usage_metadata?: { input_tokens?: number; output_tokens?: number } }).usage_metadata;
+        if (usage?.input_tokens || usage?.output_tokens) {
+          logTokenUsage({
+            sessionId,
+            requestId,
+            model: AGENT_MODEL,
+            promptTokens: usage.input_tokens || 0,
+            completionTokens: usage.output_tokens || 0,
+            source: "slack",
+          }).catch((err) =>
+            console.error("[slack/incoming] Failed to log tokens:", err)
+          );
+        }
+      }
+
+      // Check for Tier 2 HITL
+      let hitlSent = false;
+      if (threadTs) {
+        for (const m of result.messages) {
+          if (m.getType?.() !== "tool" || m.name !== "sw4_auto_triage") continue;
+          try {
+            const parsed = JSON.parse(
+              typeof m.content === "string" ? m.content : "{}"
+            );
+            const category = parsed.classification?.category;
+            const ticketId = parsed.ticket_id;
+            if (category && ticketId && parsed.actions_taken) {
+              const tier = await getCategoryTier(category);
+              if (tier === "T2") {
+                const confidence = parsed.classification?.suggestedPriority === "critical" ? 0.95 : 0.85;
+                const action = category === "spam" ? "close_as_spam" :
+                  parsed.classification?.suggestedAgent?.includes("spencer") ? "assign_spencer" : "assign_danni";
+
+                await createApprovalRequest({
+                  ticketId,
+                  category,
+                  confidence,
+                  recommendedAction: action,
+                  agentResponse: responseText,
+                  slackChannel: channel,
+                  slackThreadTs: threadTs,
+                });
+
+                const blocks = formatApprovalBlocks({
+                  ticketId,
+                  category,
+                  confidence,
+                  recommendedAction: action,
+                  agentResponse: responseText,
+                });
+
+                await sendSlackBlocks(
+                  `AI recommendation for ticket #${ticketId}`,
+                  blocks,
+                  channel,
+                  threadTs
+                );
+                hitlSent = true;
+                break;
+              }
+            }
+          } catch { /* not parseable, skip */ }
+        }
+      }
+
+      // Send response to Slack
+      if (!hitlSent) {
+        await sendSlackMessage(responseText, channel, threadTs);
+      }
+
+      // End session tracking (success)
+      if (sessionId) {
+        endSession({
+          sessionId,
+          startTime,
+          success: true,
+          answer: responseText,
+          toolsUsed,
+        }).catch((err) =>
+          console.error("[slack/incoming] Failed to end session:", err)
+        );
+      }
+
+      // Log to api_logs
+      await logApiCall({
         endpoint: "/webhooks/slack/incoming",
         method: "POST",
+        status: 200,
         request: body,
-        error: errorMessage,
+        response: { text: responseText },
         duration: Date.now() - startTime,
       });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
+      console.error("[slack/incoming] Error:", errorMessage);
 
-      await sendSlackMessage(
-        `Error processing message: ${errorMessage}`,
-        channel,
-        threadTs
-      );
-    } catch (logError) {
-      console.error("[slack/incoming] Error handler failed:", logError);
+      if (sessionId) {
+        endSession({
+          sessionId,
+          startTime,
+          success: false,
+          error: errorMessage,
+          toolsUsed: [],
+        }).catch((err) =>
+          console.error("[slack/incoming] Failed to end session:", err)
+        );
+      }
+
+      try {
+        await logWebhookError({
+          endpoint: "/webhooks/slack/incoming",
+          error: errorMessage,
+          duration: Date.now() - startTime,
+        });
+
+        await logApiError({
+          endpoint: "/webhooks/slack/incoming",
+          method: "POST",
+          request: body,
+          error: errorMessage,
+          duration: Date.now() - startTime,
+        });
+
+        await sendSlackMessage(
+          `Error processing message: ${errorMessage}`,
+          channel,
+          threadTs
+        );
+      } catch (logError) {
+        console.error("[slack/incoming] Error handler failed:", logError);
+      }
     }
+  });
 
-    return NextResponse.json({ ok: false, error: errorMessage }, { status: 500 });
-  }
+  // Respond immediately — Slack gets 200 within milliseconds
+  return NextResponse.json({ ok: true });
 }
