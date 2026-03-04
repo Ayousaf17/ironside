@@ -88,6 +88,7 @@ export interface BehaviorLogEntry {
   category?: string;
   responseText?: string;
   macroIdUsed?: number;
+  macroName?: string;
   tagsApplied: string[];
   reopened: boolean;
   rawEvent: object;
@@ -99,6 +100,8 @@ export interface BehaviorLogEntry {
   responseCharCount?: number;
   messagePosition?: number;
   isFirstResponse?: boolean;
+  timeToRespondMin?: number;
+  touchesToResolution?: number;
 }
 
 // --- Detect payload format ---

@@ -72,6 +72,7 @@ model AgentBehaviorLog {
   category             String?  // track_order, order_verification, product_question, report_issue, etc.
   responseText         String?  @map("response_text")
   macroIdUsed          Int?     @map("macro_id_used")
+  macroName            String?  @map("macro_name")
   timeToRespondMin     Float?   @map("time_to_respond_min")
   touchesToResolution  Int?     @map("touches_to_resolution")
   reopened             Boolean  @default(false)
