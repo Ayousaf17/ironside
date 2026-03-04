@@ -57,8 +57,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ challenge: body.challenge });
   }
 
+  console.log("[slack/incoming] type:", body.type, "event_type:", body.event?.type, "bot_id:", body.event?.bot_id, "subtype:", body.event?.subtype, "text:", body.event?.text?.substring(0, 50));
+
   // Verify request is actually from Slack
   if (!verifySlackSignature(rawBody, request)) {
+    console.log("[slack/incoming] REJECTED: invalid signature");
     return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
   }
 
@@ -70,16 +73,18 @@ export async function POST(request: NextRequest) {
 
   // Ignore bot messages (prevents infinite loop)
   if (body.event?.bot_id || body.event?.subtype) {
+    console.log("[slack/incoming] FILTERED: bot or system event");
     return NextResponse.json({ ok: true, ignored: "bot_or_system_event" });
   }
 
   // Ignore empty messages
   const text = (body.event?.text || body.text || "").trim();
   if (!text) {
+    console.log("[slack/incoming] FILTERED: empty message");
     return NextResponse.json({ ok: true, ignored: "empty_message" });
   }
 
-  console.log("[slack/incoming]", text);
+  console.log("[slack/incoming] PROCESSING:", text);
 
   const channel = body.event?.channel;
   const threadTs = body.event?.thread_ts || body.event?.ts;
