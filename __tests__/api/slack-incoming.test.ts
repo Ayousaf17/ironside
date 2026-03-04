@@ -92,14 +92,14 @@ describe("POST /api/webhooks/slack/incoming", () => {
     expect(json.challenge).toBe("test-challenge-123");
   });
 
-  it("ignores retry requests (x-slack-retry-num header)", async () => {
+  it("processes retry requests instead of ignoring them", async () => {
     const req = makeRequest(
-      { event: { text: "hello", channel: "C123" } },
+      { event: { text: "hello", channel: "C123", user: "U123" } },
       { "x-slack-retry-num": "1" }
     );
     const res = await POST(req);
     const json = await res.json();
-    expect(json.ignored).toBe("retry");
+    expect(json.ok).toBe(true);
   });
 
   it("ignores bot messages (bot_id present)", async () => {

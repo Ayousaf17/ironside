@@ -62,9 +62,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "invalid_signature" }, { status: 401 });
   }
 
-  // Ignore Slack retries (Slack resends if response takes >3s)
-  if (request.headers.get("x-slack-retry-num")) {
-    return NextResponse.json({ ok: true, ignored: "retry" });
+  // Log Slack retries but process them (agent may take >3s to respond)
+  const retryNum = request.headers.get("x-slack-retry-num");
+  if (retryNum) {
+    console.log(`[slack/incoming] Retry #${retryNum} — processing anyway`);
   }
 
   // Ignore bot messages (prevents infinite loop)
