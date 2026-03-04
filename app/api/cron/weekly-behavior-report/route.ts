@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getUsageSince } from "@/lib/repos/ai-token-usage.repo";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { formatWeeklyBehaviorReport } from "@/lib/slack/formatters";
 import { logCronError } from "@/lib/services/logging.service";
@@ -18,12 +17,11 @@ export async function GET(request: Request) {
     const now = new Date();
     const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
 
-    const [behaviorLogs, tokenUsage, ticketAnalytics] = await Promise.all([
+    const [behaviorLogs, ticketAnalytics] = await Promise.all([
       prisma.agentBehaviorLog.findMany({
         where: { occurredAt: { gte: weekAgo } },
         orderBy: { occurredAt: "desc" },
       }),
-      getUsageSince(weekAgo),
       prisma.ticketAnalytics.findMany({
         where: { createdAt: { gte: weekAgo } },
       }),
@@ -31,7 +29,6 @@ export async function GET(request: Request) {
 
     const report = formatWeeklyBehaviorReport({
       behaviorLogs,
-      tokenUsage,
       ticketAnalytics,
       startDate: weekAgo,
       endDate: now,
@@ -43,7 +40,6 @@ export async function GET(request: Request) {
       ok: true,
       stats: {
         behaviorLogs: behaviorLogs.length,
-        tokenRecords: tokenUsage.length,
         ticketAnalytics: ticketAnalytics.length,
       },
     });
