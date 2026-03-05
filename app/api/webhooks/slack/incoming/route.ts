@@ -270,6 +270,12 @@ export async function POST(request: NextRequest) {
         request: body,
         response: { text: responseText },
         duration: Date.now() - startTime,
+        actorUser: slackUserId,
+        slackChannel: channel,
+        slackThreadTs: threadTs,
+        intent: toolsUsed[0] ?? "general_query",
+        toolsUsed,
+        sessionId,
       });
     } catch (error) {
       const errorMessage =

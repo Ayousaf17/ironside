@@ -8,6 +8,13 @@ export function logApiCall(opts: {
   request?: object;
   response?: object;
   duration?: number;
+  actorUser?: string;
+  slackChannel?: string;
+  slackThreadTs?: string;
+  ticketId?: number;
+  intent?: string;
+  toolsUsed?: string[];
+  sessionId?: string;
 }) {
   return createApiLog(opts);
 }

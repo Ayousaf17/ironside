@@ -133,6 +133,7 @@ export async function POST(request: Request) {
       status: 200,
       request: body,
       response: result,
+      intent: "backfill",
     });
 
     return NextResponse.json({ ok: true, ...result });
@@ -161,6 +162,7 @@ export async function GET() {
       method: "GET",
       status: 200,
       response: result,
+      intent: "backfill",
     });
 
     return NextResponse.json({ ok: true, ...result });

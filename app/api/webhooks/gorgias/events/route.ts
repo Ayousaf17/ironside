@@ -38,6 +38,8 @@ export async function POST(request: Request) {
         request: { type: eventType, ticket_id: payload.ticket_id },
         response: { skipped: true, reason: "no_agent_action" },
         duration: Date.now() - startTime,
+        ticketId: payload.ticket_id ? Number(payload.ticket_id) : undefined,
+        intent: eventType,
       });
       return NextResponse.json({ ok: true, logged: 0 });
     }
@@ -62,6 +64,8 @@ export async function POST(request: Request) {
       request: { type: eventType, ticket_id: payload.ticket_id },
       response: { logged: count, actions: entries.map(e => e.action) },
       duration: Date.now() - startTime,
+      ticketId: payload.ticket_id ? Number(payload.ticket_id) : undefined,
+      intent: eventType,
     });
 
     console.log(`[gorgias-webhook] Logged ${count} behavior entries for ticket ${payload.ticket_id}`);
