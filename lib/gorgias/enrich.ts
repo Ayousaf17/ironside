@@ -15,7 +15,9 @@ export async function enrichBehaviorEntry(entry: BehaviorLogEntry): Promise<Beha
 
   // Overwrite with full ticket data
   enriched.ticketChannel = ticket.channel || enriched.ticketChannel;
-  enriched.ticketTags = ticket.tags?.length ? ticket.tags : enriched.ticketTags;
+  // Gorgias API returns tags as objects {id, name, decoration} — extract just the name strings
+  const apiTags = ticket.tags as unknown as { name: string }[];
+  enriched.ticketTags = apiTags?.length ? apiTags.map(t => t.name) : enriched.ticketTags;
 
   // Find the matching message by agent email + closest timestamp
   const agentMessages = ticket.messages.filter(m => m.sender?.type === "agent");
