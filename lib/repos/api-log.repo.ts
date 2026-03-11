@@ -8,6 +8,13 @@ export function createApiLog(data: {
   response?: object;
   error?: string;
   duration?: number;
+  actorUser?: string;
+  slackChannel?: string;
+  slackThreadTs?: string;
+  ticketId?: number;
+  intent?: string;
+  toolsUsed?: string[];
+  sessionId?: string;
 }) {
   return prisma.apiLog.create({ data });
 }
