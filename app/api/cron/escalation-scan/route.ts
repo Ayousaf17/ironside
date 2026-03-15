@@ -47,10 +47,11 @@ export async function GET(request: Request) {
       const ageHours = Math.round(
         (Date.now() - new Date(ticket.created_datetime).getTime()) / 3600000
       );
-      const combined = `${ticket.subject} ${ticket.messages.map((m) => m.body_text).join(" ")}`;
-      const customerMsg = ticket.messages.find((m) => m.sender.type === "customer");
+      const messages = ticket.messages || [];
+      const combined = `${ticket.subject} ${messages.map((m) => m.body_text).join(" ")}`;
+      const customerMsg = messages.find((m) => m.from_agent === false || m.sender?.type === "customer");
       const customerName = customerMsg?.sender.name || "Unknown";
-      const hasResponse = ticket.messages.some((m) => m.sender.type === "agent");
+      const hasResponse = messages.some((m) => m.from_agent === true || m.sender?.type === "agent");
 
       // Critical scan
       for (const { pattern, reason } of CRITICAL_PATTERNS) {

@@ -42,8 +42,9 @@ function isSpam(ticket: GorgiasTicket): boolean {
 }
 
 function getResolutionMinutes(ticket: GorgiasTicket): number | null {
-  const customerMsg = ticket.messages.find((m) => m.sender.type === "customer");
-  const agentMsg = ticket.messages.find((m) => m.sender.type === "agent");
+  const msgs = ticket.messages || [];
+  const customerMsg = msgs.find((m) => m.from_agent === false || m.sender?.type === "customer");
+  const agentMsg = msgs.find((m) => m.from_agent === true || m.sender?.type === "agent");
   if (!customerMsg || !agentMsg) return null;
   const diff =
     (new Date(agentMsg.created_datetime).getTime() -
