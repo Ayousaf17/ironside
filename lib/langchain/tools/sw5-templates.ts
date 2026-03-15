@@ -161,7 +161,7 @@ function fillTemplate(template: Template, customerName: string): { body: string;
   return { body, internalNote };
 }
 
-function extractCustomerName(messages: { sender: { type: string; name: string } }[]): string {
+function extractCustomerName(messages: { sender: { type?: string; name: string } }[]): string {
   const customerMsg = messages.find(m => m.sender.type === "customer");
   if (!customerMsg) return "there";
   // Use first name only
