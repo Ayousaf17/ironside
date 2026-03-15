@@ -10,11 +10,14 @@
 
 export interface GorgiasMessage {
   id: number;
-  sender: { type: "customer" | "agent"; name: string };
+  sender: { type?: "customer" | "agent"; name: string; email?: string };
   body_text: string;
   created_datetime: string;
   channel?: string;
   meta?: { macro_id?: number };
+  // Real Gorgias API fields (not present in mock data)
+  from_agent?: boolean;
+  macros?: { id: number }[];
 }
 
 export interface GorgiasTicket {

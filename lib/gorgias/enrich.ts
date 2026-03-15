@@ -3,7 +3,14 @@
 // timeToRespondMin, touchesToResolution, ticketTags, ticketChannel.
 
 import type { BehaviorLogEntry } from "./events";
+import type { GorgiasMessage } from "./mock";
 import { fetchTicket, fetchMacro } from "./read";
+
+// Gorgias API uses from_agent boolean; mock data uses sender.type string.
+function isAgentMessage(msg: GorgiasMessage): boolean {
+  if (typeof msg.from_agent === "boolean") return msg.from_agent;
+  return msg.sender?.type === "agent";
+}
 
 export async function enrichBehaviorEntry(entry: BehaviorLogEntry): Promise<BehaviorLogEntry> {
   if (!entry.ticketId) return entry;
@@ -19,8 +26,8 @@ export async function enrichBehaviorEntry(entry: BehaviorLogEntry): Promise<Beha
   const apiTags = ticket.tags as unknown as { name: string }[];
   enriched.ticketTags = apiTags?.length ? apiTags.map(t => t.name) : enriched.ticketTags;
 
-  // Find the matching message by agent email + closest timestamp
-  const agentMessages = ticket.messages.filter(m => m.sender?.type === "agent");
+  // Find agent messages using from_agent (real API) or sender.type (mock)
+  const agentMessages = ticket.messages.filter(isAgentMessage);
   enriched.touchesToResolution = agentMessages.length;
 
   // First agent response detection + time-to-respond
@@ -35,16 +42,16 @@ export async function enrichBehaviorEntry(entry: BehaviorLogEntry): Promise<Beha
 
   // Match the specific message for this entry (by agent email + closest time)
   const entryTime = entry.occurredAt.getTime();
-  let bestMatch: (typeof ticket.messages)[number] | null = null;
+  let bestMatch: GorgiasMessage | null = null;
   let bestDiff = Infinity;
 
   for (const msg of ticket.messages) {
-    // Match by agent email if available, otherwise by agent type
-    const isAgentMatch = entry.agentEmail
-      ? (msg.sender as { email?: string })?.email === entry.agentEmail || msg.sender?.name === entry.agent
-      : msg.sender?.type === "agent";
+    // Match by agent email if available, otherwise by from_agent/sender.type
+    const isMatch = entry.agentEmail
+      ? msg.sender?.email === entry.agentEmail || msg.sender?.name === entry.agent
+      : isAgentMessage(msg);
 
-    if (!isAgentMatch) continue;
+    if (!isMatch) continue;
 
     const msgTime = new Date(msg.created_datetime).getTime();
     const diff = Math.abs(msgTime - entryTime);
@@ -62,8 +69,8 @@ export async function enrichBehaviorEntry(entry: BehaviorLogEntry): Promise<Beha
     // Is this the first agent response?
     enriched.isFirstResponse = firstAgentMsg ? bestMatch.id === firstAgentMsg.id : false;
 
-    // Macro detection from message meta
-    const macroId = bestMatch.meta?.macro_id;
+    // Macro detection: check macros array (real API), then meta.macro_id (legacy/mock)
+    const macroId = bestMatch.macros?.[0]?.id ?? bestMatch.meta?.macro_id;
     if (macroId) {
       enriched.macroIdUsed = macroId;
       try {
