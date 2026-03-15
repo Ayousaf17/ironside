@@ -28,12 +28,14 @@ function getTicketAgeHours(ticket: GorgiasTicket): number {
 }
 
 function getCustomerName(ticket: GorgiasTicket): string {
-  const customerMsg = ticket.messages.find(m => m.sender.type === "customer");
+  const msgs = ticket.messages || [];
+  const customerMsg = msgs.find(m => m.from_agent === false || m.sender?.type === "customer");
   return customerMsg?.sender.name || "Unknown";
 }
 
 function hasAgentResponse(ticket: GorgiasTicket): boolean {
-  return ticket.messages.some(m => m.sender.type === "agent");
+  const msgs = ticket.messages || [];
+  return msgs.some(m => m.from_agent === true || m.sender?.type === "agent");
 }
 
 // Critical patterns that always need immediate attention

@@ -46,7 +46,7 @@ export async function GET(request: Request) {
         email: user.email,
         firstName: user.firstname || user.first_name,
         lastName: user.lastname || user.last_name,
-        role: user.role,
+        role: typeof user.role === "object" ? user.role?.name : user.role,
         isActive: user.deactivated_datetime === null,
       });
       synced++;
