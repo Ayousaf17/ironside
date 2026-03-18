@@ -70,12 +70,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    // 1. Fetch structured analytics directly — numbers come from code, not LLM
-    const tickets = await getTickets();
-    const analytics = calculateAnalytics(tickets);
-
+    // 1. Fetch tickets updated in the last 24 hours — one pulse per day window
     const now = new Date();
-    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+    const tickets = await getTickets({ updatedAfter: twentyFourHoursAgo });
+    const analytics = calculateAnalytics(tickets);
 
     const workloadMap = Object.fromEntries(
       analytics.agentBreakdown.map((a) => [a.agent, a.ticketCount])
@@ -113,7 +112,7 @@ export async function GET(request: Request) {
       topCategory: analytics.topQuestions[0]?.question ?? null,
       rawAnalytics: analytics as unknown as object,
       insights: { source: "cron", prompt: "pulse-check-v2" },
-      dateRangeStart: thirtyDaysAgo,
+      dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
       resolutionP50Min: analytics.p50ResolutionMinutes,
       resolutionP90Min: analytics.p90ResolutionMinutes,

@@ -15,6 +15,7 @@ import OpsNotesHistory from '@/components/dashboard/OpsNotesHistory';
 import TicketFlowPanel from '@/components/dashboard/TicketFlowPanel';
 import AgentBehaviorTab, { type AgentBehaviorLog } from '@/components/dashboard/AgentBehaviorTab';
 import TierReadinessTab, { type TierCategory } from '@/components/dashboard/TierReadinessTab';
+import AiPerformanceTab, { type AiAnalytics } from '@/components/dashboard/AiPerformanceTab';
 
 type TimePeriod = '7d' | '30d' | '90d' | 'all';
 
@@ -39,20 +40,23 @@ export default function SupportCommandCenter() {
   const [behaviorLogs, setBehaviorLogs] = useState<AgentBehaviorLog[]>([]);
   const [tierCategories, setTierCategories] = useState<TierCategory[]>([]);
   const [totalTicketsAnalyzed, setTotalTicketsAnalyzed] = useState(0);
+  const [aiAnalytics, setAiAnalytics] = useState<AiAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [pulseRes, behaviorRes, tiersRes] = await Promise.all([
+        const [pulseRes, behaviorRes, tiersRes, aiRes] = await Promise.all([
           fetch('/api/dashboard?tab=pulse'),
           fetch('/api/dashboard?tab=behavior'),
           fetch('/api/dashboard?tab=tiers'),
+          fetch('/api/dashboard?tab=ai'),
         ]);
-        const [pulseJson, behaviorJson, tiersJson] = await Promise.all([
+        const [pulseJson, behaviorJson, tiersJson, aiJson] = await Promise.all([
           pulseRes.json(),
           behaviorRes.json(),
           tiersRes.json(),
+          aiRes.json(),
         ]);
         if (pulseJson.data) setPulseData(pulseJson.data);
         if (behaviorJson.data) setBehaviorLogs(behaviorJson.data);
@@ -60,6 +64,7 @@ export default function SupportCommandCenter() {
           setTierCategories(tiersJson.categories);
           setTotalTicketsAnalyzed(tiersJson.totalTicketsAnalyzed ?? 0);
         }
+        if (aiJson.today) setAiAnalytics(aiJson);
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -206,16 +211,9 @@ export default function SupportCommandCenter() {
           </div>
         )}
 
-        {/* AI PERFORMANCE TAB — placeholder until AI analytics queries are built */}
+        {/* AI PERFORMANCE TAB */}
         {activeTab === 'ai-performance' && (
-          <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-12 text-center">
-            <h3 className="text-lg font-semibold text-gray-900 mb-2">AI Performance</h3>
-            <p className="text-sm text-gray-500 max-w-md mx-auto">
-              Token usage, cost tracking, and workflow health metrics coming next.
-              Raw data is already captured in <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">ai_token_usage</code>{' '}
-              and <code className="text-xs bg-gray-100 px-1 py-0.5 rounded">agent_sessions</code>.
-            </p>
-          </div>
+          <AiPerformanceTab data={aiAnalytics} />
         )}
       </div>
     </div>
