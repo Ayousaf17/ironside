@@ -25,9 +25,13 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getAiAnalytics());
       case "tiers":
         return NextResponse.json(await getTierStatus());
+      case "pulse":
+        return NextResponse.json(await getPulseChecks());
+      case "behavior":
+        return NextResponse.json(await getBehaviorLogs());
       default:
         return NextResponse.json(
-          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers"] },
+          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior"] },
           { status: 400 }
         );
     }
@@ -189,6 +193,89 @@ async function getTierStatus() {
       ticketCount: r.ticketCount,
       accuracy: Math.round(r.accuracy * 1000) / 10,
       avgConfidence: Math.round(r.avgConfidence * 1000) / 10,
+    })),
+  };
+}
+
+async function getPulseChecks() {
+  const rows = await prisma.pulseCheck.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
+
+  return {
+    tab: "pulse",
+    data: rows.map((p) => ({
+      id: p.id,
+      created_at: p.createdAt.toISOString(),
+      date_range_start: p.dateRangeStart?.toISOString().split("T")[0] ?? "",
+      date_range_end: p.dateRangeEnd?.toISOString().split("T")[0] ?? "",
+      ticket_count: p.ticketCount ?? 0,
+      open_count: p.openTickets ?? 0,
+      closed_count: p.closedTickets ?? 0,
+      resolution_avg_min: p.avgResolutionMin ?? 0,
+      resolution_p50_min: p.resolutionP50Min ?? 0,
+      resolution_p90_min: p.resolutionP90Min ?? 0,
+      tickets_analyzed: p.ticketsAnalyzed ?? 0,
+      spam_pct: p.spamRate ?? 0,
+      unassigned_pct: p.unassignedPct ?? 0,
+      channel_email: p.channelEmail ?? 0,
+      channel_chat: p.channelChat ?? 0,
+      workload: (p.workload as Record<string, number>) ?? {},
+      top_questions: (p.topQuestions as { question: string; count: number; ticket_ids: number[] }[]) ?? [],
+      tags: (p.tags as Record<string, number>) ?? {},
+      ops_notes: (p.opsNotes as string[]) ?? [],
+    })),
+  };
+}
+
+async function getBehaviorLogs() {
+  const rows = await prisma.agentBehaviorLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 500,
+    select: {
+      id: true,
+      createdAt: true,
+      action: true,
+      ticketId: true,
+      ticketSubject: true,
+      ticketChannel: true,
+      category: true,
+      ticketTags: true,
+      agent: true,
+      agentEmail: true,
+      responseCharCount: true,
+      macroIdUsed: true,
+      macroName: true,
+      messagePosition: true,
+      timeToRespondMin: true,
+      touchesToResolution: true,
+      csatScore: true,
+      occurredAt: true,
+    },
+  });
+
+  return {
+    tab: "behavior",
+    data: rows.map((b) => ({
+      id: b.id,
+      created_at: b.createdAt.toISOString(),
+      event_type: b.action,
+      ticket_id: b.ticketId,
+      ticket_subject: b.ticketSubject,
+      ticket_channel: b.ticketChannel,
+      ticket_category: b.category,
+      ticket_tags: b.ticketTags,
+      agent_name: b.agent,
+      agent_email: b.agentEmail,
+      response_char_count: b.responseCharCount,
+      is_macro: b.macroIdUsed !== null,
+      macro_name: b.macroName,
+      message_position: b.messagePosition,
+      time_to_first_response_min: b.timeToRespondMin,
+      touches_to_resolution: b.touchesToResolution,
+      csat_score: b.csatScore,
+      resolved_at: b.occurredAt?.toISOString() ?? null,
     })),
   };
 }
