@@ -81,10 +81,12 @@ export async function handleShowUnassignedTickets({
   responseUrl,
   slackUserId,
   channel,
+  categoryFilter,
 }: {
   responseUrl: string;
   slackUserId: string;
   channel: string;
+  categoryFilter?: string;
 }): Promise<void> {
   // 1. Lock the pulse check message immediately
   await callResponseUrl(responseUrl, {
@@ -95,35 +97,41 @@ export async function handleShowUnassignedTickets({
     replace_original: true,
   });
 
-  // 2. Fetch unassigned non-spam tickets
-  const tickets = await fetchUnassignedTickets();
+  // 2. Fetch unassigned non-spam tickets, optionally filtered by category
+  const allTickets = await fetchUnassignedTickets();
+  const tickets = categoryFilter
+    ? allTickets.filter((t) =>
+        t.tags.some((tag) => TAG_TO_CATEGORY[tag.toUpperCase()] === categoryFilter)
+      )
+    : allTickets;
 
   if (tickets.length === 0) {
-    await sendSlackBlocks(
-      "✅ No unassigned tickets — queue is fully covered!",
-      lockedBlock(
-        "✅ *No unassigned tickets* — every open ticket already has an owner!"
-      ),
-      channel
-    );
+    const msg = categoryFilter
+      ? `✅ No unassigned *${categoryFilter.replace(/_/g, " ")}* tickets — that category is fully covered!`
+      : "✅ *No unassigned tickets* — every open ticket already has an owner!";
+    await sendSlackBlocks("✅ No unassigned tickets", lockedBlock(msg), channel);
     return;
   }
 
-  // 3. Group by suggested agent
+  // 3. Group by category (not agent) so the triage chain teaches context
   const grouped = new Map<string, TriageTicket[]>();
   const unclassified: TriageTicket[] = [];
 
   for (const ticket of tickets) {
-    if (ticket.suggestedEmail) {
-      const key = ticket.suggestedEmail;
-      if (!grouped.has(key)) grouped.set(key, []);
-      grouped.get(key)!.push(ticket);
+    let category: string | null = null;
+    for (const tag of ticket.tags) {
+      const cat = TAG_TO_CATEGORY[tag.toUpperCase()];
+      if (cat) { category = cat; break; }
+    }
+    if (category) {
+      if (!grouped.has(category)) grouped.set(category, []);
+      grouped.get(category)!.push(ticket);
     } else {
       unclassified.push(ticket);
     }
   }
 
-  const assignableCount = tickets.length - unclassified.length;
+  const assignableCount = tickets.filter((t) => t.suggestedEmail !== null).length;
 
   // 4. Post the triage chain
   const blocks = formatTriageChainBlocks({
@@ -132,6 +140,7 @@ export async function handleShowUnassignedTickets({
     reviewerSlackId: slackUserId,
     assignableCount,
     totalCount: tickets.length,
+    categoryFilter,
   });
 
   await sendSlackBlocks(

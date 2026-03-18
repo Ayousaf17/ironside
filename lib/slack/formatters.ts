@@ -215,6 +215,27 @@ export function formatEscalationAlert(
   return lines.join("\n");
 }
 
+// Maps topQuestions.question strings → Slack emoji and category key
+const QUESTION_EMOJI: Record<string, string> = {
+  "Track Order":                      "📦",
+  "Order Verification":               "🔍",
+  "Product Question":                 "💻",
+  "Report Issue":                     "🔧",
+  "New submission from Contact":      "📬",
+  "Return / Exchange":                "↩️",
+  "Order Change / Cancel":            "✏️",
+};
+
+const QUESTION_TO_CATEGORY: Record<string, string> = {
+  "Track Order":                      "track_order",
+  "Order Verification":               "order_verification",
+  "Product Question":                 "product_question",
+  "Report Issue":                     "report_issue",
+  "New submission from Contact":      "contact_form",
+  "Return / Exchange":                "return_exchange",
+  "Order Change / Cancel":            "order_change_cancel",
+};
+
 export interface PulseCheckBlocksInput {
   summary: string;
   analytics: {
@@ -225,11 +246,10 @@ export interface PulseCheckBlocksInput {
     avgResolutionMinutes: number | null;
     p50ResolutionMinutes: number | null;
     p90ResolutionMinutes: number | null;
-    topQuestions: { question: string; count: number }[];
+    topQuestions: { question: string; count: number; ticketIds?: number[] }[];
     agentBreakdown: { agent: string; ticketCount: number; closeRate: number }[];
     spamCount: number;
     unassignedCount: number;
-    urgentCount: number;
   };
   dateRangeStart: Date;
   dateRangeEnd: Date;
@@ -341,47 +361,39 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
 
   blocks.push({ type: "divider" });
 
-  // Dynamic action buttons
+  // Category-specific triage buttons — one per recurring question type,
+  // up to 3. Spam is auto-handled so no spam button needed.
   const buttons: object[] = [];
 
-  if (analytics.spamCount > 0) {
-    buttons.push({
-      type: "button",
-      text: {
-        type: "plain_text",
-        text: `🗑️ Review ${analytics.spamCount} Spam Tickets`,
-        emoji: true,
-      },
-      action_id: "show_spam_tickets",
-      value: JSON.stringify({ count: analytics.spamCount }),
-    });
-  }
+  if (analytics.unassignedCount > 0) {
+    const topCats = analytics.topQuestions
+      .slice(0, 3)
+      .filter((q) => QUESTION_TO_CATEGORY[q.question]);
 
-  if (analytics.unassignedCount > 5) {
-    buttons.push({
-      type: "button",
-      text: {
-        type: "plain_text",
-        text: `📋 Triage ${analytics.unassignedCount} Unassigned`,
-        emoji: true,
-      },
-      action_id: "show_unassigned_tickets",
-      value: JSON.stringify({ count: analytics.unassignedCount }),
-    });
-  }
-
-  if (analytics.urgentCount > 0) {
-    buttons.push({
-      type: "button",
-      text: {
-        type: "plain_text",
-        text: `🔴 Review ${analytics.urgentCount} Urgent`,
-        emoji: true,
-      },
-      action_id: "show_urgent_tickets",
-      value: JSON.stringify({ count: analytics.urgentCount }),
-      style: "danger",
-    });
+    if (topCats.length > 0) {
+      for (const q of topCats) {
+        const emoji = QUESTION_EMOJI[q.question] ?? "📋";
+        const category = QUESTION_TO_CATEGORY[q.question]!;
+        buttons.push({
+          type: "button",
+          text: { type: "plain_text", text: `${emoji} ${q.question} (${q.count})`, emoji: true },
+          action_id: "show_category_triage",
+          value: JSON.stringify({ category, question: q.question, count: q.count }),
+        });
+      }
+    } else {
+      // Fallback when topQuestions don't map to known categories
+      buttons.push({
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: `📋 Triage ${analytics.unassignedCount} Unassigned`,
+          emoji: true,
+        },
+        action_id: "show_unassigned_tickets",
+        value: JSON.stringify({ count: analytics.unassignedCount }),
+      });
+    }
   }
 
   if (buttons.length > 0) {
@@ -510,12 +522,43 @@ export function formatSpamChainBlocks(
 
 // ---- Triage Chain ----
 
+// Playbook tips per category — shown above each ticket group so the agent
+// knows exactly what to do before reading the first ticket.
+const CATEGORY_DISPLAY_NAME: Record<string, string> = {
+  track_order:          "📦 Track Order",
+  order_verification:   "🔍 Order Verification",
+  return_exchange:      "↩️ Return / Exchange",
+  report_issue:         "🔧 Report an Issue",
+  product_question:     "💻 Product Question",
+  order_change_cancel:  "✏️ Order Change / Cancel",
+  contact_form:         "📬 Contact Form",
+};
+
+const CATEGORY_PLAYBOOK: Record<string, string> = {
+  track_order:
+    "💡 Check if verified + in build window (15-20 days). Past window → use `order_status_overdue`. Recently shipped → use `order_status_shipped`.",
+  order_verification:
+    "💡 Customer needs ID + billing address. Docs not yet submitted → use `verification_what_needed`. Already submitted but stuck → use `verification_stuck`.",
+  return_exchange:
+    "💡 30-day window, 15% restocking fee. Get reason before issuing RMA. Use `return_process` template.",
+  report_issue:
+    "💡 WiFi/driver issue → use `wifi_driver_fix`. Water cooling leak → CRITICAL, use `water_cooling_critical`, do not let customer power on.",
+  product_question:
+    "💡 Pre-sale inquiry. Confirm specs, compatibility, or pricing. No template — draft a custom response.",
+  order_change_cancel:
+    "💡 Changes allowed only if order is still in verification. In build queue → escalate to build team for feasibility.",
+  contact_form:
+    "💡 General inquiry — read carefully for intent before routing or replying.",
+};
+
 export interface TriageChainInput {
+  // grouped is keyed by category key (e.g. "track_order"), not agent email
   grouped: Map<string, { id: number; subject: string; tags: string[]; created_datetime: string; suggestedEmail: string | null }[]>;
   unclassified: { id: number; subject: string; tags: string[]; created_datetime: string; suggestedEmail: string | null }[];
   reviewerSlackId: string;
   assignableCount: number;
   totalCount: number;
+  categoryFilter?: string; // when set, show only this category
 }
 
 function ticketAge(created_datetime: string): string {
@@ -525,16 +568,13 @@ function ticketAge(created_datetime: string): string {
   return `${Math.floor(secs / 86400)}d`;
 }
 
-function agentDisplayName(email: string): string {
-  return email.split("@")[0]
-    .split(/[-.]/)
-    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
-    .join(" ");
-}
-
 export function formatTriageChainBlocks(input: TriageChainInput): object[] {
-  const { grouped, unclassified, reviewerSlackId, assignableCount, totalCount } = input;
+  const { grouped, unclassified, reviewerSlackId, assignableCount, totalCount, categoryFilter } = input;
   const blocks: object[] = [];
+
+  const categoryLabel = categoryFilter
+    ? (CATEGORY_DISPLAY_NAME[categoryFilter] ?? categoryFilter)
+    : "All Categories";
 
   // Header
   blocks.push({
@@ -550,28 +590,36 @@ export function formatTriageChainBlocks(input: TriageChainInput): object[] {
     type: "section",
     text: {
       type: "mrkdwn",
-      text: `Opened by <@${reviewerSlackId}> · Unassigned open tickets · Last 24h window`,
+      text: `Opened by <@${reviewerSlackId}> · ${categoryLabel} · Unassigned open tickets`,
     },
   });
 
   blocks.push({ type: "divider" });
 
-  // Per-agent groups — each ticket as its own section with a Reply button
-  for (const [email, tickets] of grouped.entries()) {
-    const name = agentDisplayName(email);
+  // Per-category groups — each with a playbook tip before the ticket list
+  for (const [category, tickets] of grouped.entries()) {
+    const displayName = CATEGORY_DISPLAY_NAME[category] ?? category;
+    const playbook = CATEGORY_PLAYBOOK[category];
 
     blocks.push({
       type: "context",
-      elements: [{ type: "mrkdwn", text: `*→ ${name}* (${tickets.length} ticket${tickets.length !== 1 ? "s" : ""})` }],
+      elements: [{ type: "mrkdwn", text: `*${displayName}* — ${tickets.length} ticket${tickets.length !== 1 ? "s" : ""}` }],
     });
+
+    if (playbook) {
+      blocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: playbook }],
+      });
+    }
 
     const shown = tickets.slice(0, 8);
     for (const t of shown) {
       const subject = t.subject.length > 55 ? `${t.subject.slice(0, 55)}…` : t.subject;
-      const tag = t.tags.find((tg) => !["urgent", "auto-close", "non-support-related"].includes(tg.toLowerCase())) ?? "—";
+      const assignedTo = t.suggestedEmail ? ` → ${t.suggestedEmail.split("@")[0]}` : "";
       blocks.push({
         type: "section",
-        text: { type: "mrkdwn", text: `*#${t.id}* — ${subject}\n_${tag} · ${ticketAge(t.created_datetime)} ago_` },
+        text: { type: "mrkdwn", text: `*#${t.id}* — ${subject}\n_${ticketAge(t.created_datetime)} ago${assignedTo}_` },
         accessory: {
           type: "button",
           text: { type: "plain_text", text: "Reply →" },
@@ -876,6 +924,16 @@ export function formatUrgentTicketBlocks(input: UrgentTicketBlocksInput): object
       elements: [{ type: "mrkdwn", text: `Tags: ${tags.map(t => `\`${t}\``).join(" ")}` }],
     });
   }
+
+  // Escalation playbook — what to do right now based on severity
+  const playbookText = severity === "critical"
+    ? "💡 *Protocol:* Reply within 15 min. If water cooling — customer must NOT power on; initiate RMA. Assess hardware damage before suggesting any fixes."
+    : "💡 *Protocol:* Reply within 1 hour. Get full details before suggesting a fix. Escalate to build team if order-related.";
+
+  blocks.push({
+    type: "context",
+    elements: [{ type: "mrkdwn", text: playbookText }],
+  });
 
   return blocks;
 }

@@ -185,12 +185,11 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── Urgent placeholder (Phase 5) ─────────────────────────────────────────
-  if (action.action_id === "show_urgent_tickets") {
-    await sendSlackMessage(
-      "🔄 Urgent ticket review coming in the next update.",
-      channel,
-      threadTs
+  // ── Category triage (from pulse check category buttons) ──────────────────
+  if (action.action_id === "show_category_triage") {
+    const { category } = JSON.parse(action.value) as { category: string; question: string; count: number };
+    after(() =>
+      handleShowUnassignedTickets({ responseUrl, slackUserId: userId, channel, categoryFilter: category })
     );
     return NextResponse.json({ ok: true });
   }

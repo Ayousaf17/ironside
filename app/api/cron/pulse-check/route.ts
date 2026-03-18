@@ -104,7 +104,6 @@ export async function GET(request: Request) {
         ...analytics,
         spamCount: analytics.spamCount,
         unassignedCount: analytics.unassignedCount,
-        urgentCount: 0, // Phase 5 will wire this up
       },
       dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
