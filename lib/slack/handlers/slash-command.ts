@@ -26,7 +26,7 @@ export async function handleSlashCommand(text: string): Promise<SlashResult> {
     case "pulse":
       return handlePulse();
     default:
-      return handleHelp();
+      return handleHelp(command);
   }
 }
 
@@ -154,22 +154,49 @@ async function handlePulse(): Promise<SlashResult> {
 
 // --- help ---
 
-function handleHelp(): SlashResult {
+async function handleHelp(unknownCommand?: string): Promise<SlashResult> {
+  const latest = await prisma.pulseCheck.findFirst({
+    orderBy: { createdAt: "desc" },
+    select: { unassignedPct: true, topCategory: true, openTickets: true },
+  });
+
+  const contextLines: string[] = [];
+  if (latest) {
+    if (latest.openTickets != null && latest.openTickets > 0) {
+      contextLines.push(`📬 *${latest.openTickets} open tickets* right now`);
+    }
+    if (latest.unassignedPct != null && latest.unassignedPct > 0) {
+      contextLines.push(`⚠️ *${latest.unassignedPct.toFixed(0)}% unassigned* — run \`/ironside pulse\` then use the triage buttons`);
+    }
+    if (latest.topCategory) {
+      const cat = latest.topCategory.replace(/_/g, " ");
+      contextLines.push(`🔥 Top category right now: *${cat}*`);
+    }
+  }
+
+  const unknownNote = unknownCommand
+    ? `_Unknown command: \`${unknownCommand}\`_\n\n`
+    : "";
+
+  const commandList = [
+    "`/ironside stats` — latest support metrics",
+    "`/ironside ticket <id>` — look up a ticket",
+    "`/ironside pulse` — trigger a manual pulse check",
+    "`/ironside help` — show this message",
+  ].join("\n");
+
+  const body = [
+    unknownNote + "*Ironside Support Commands*",
+    commandList,
+    ...(contextLines.length > 0 ? ["", "*Queue right now:*", ...contextLines] : []),
+  ].join("\n");
+
   return {
     text: "Ironside Support Bot",
     blocks: [
       {
         type: "section",
-        text: {
-          type: "mrkdwn",
-          text: [
-            "*Ironside Support Commands*",
-            "`/ironside stats` — latest support metrics",
-            "`/ironside ticket <id>` — look up a ticket",
-            "`/ironside pulse` — trigger a manual pulse check",
-            "`/ironside help` — show this message",
-          ].join("\n"),
-        },
+        text: { type: "mrkdwn", text: body },
       },
     ],
   };
