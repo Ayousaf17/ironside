@@ -14,6 +14,7 @@ import P90TrendChart from '@/components/dashboard/P90TrendChart';
 import OpsNotesHistory from '@/components/dashboard/OpsNotesHistory';
 import TicketFlowPanel from '@/components/dashboard/TicketFlowPanel';
 import AgentBehaviorTab, { type AgentBehaviorLog } from '@/components/dashboard/AgentBehaviorTab';
+import TierReadinessTab, { type TierCategory } from '@/components/dashboard/TierReadinessTab';
 
 type TimePeriod = '7d' | '30d' | '90d' | 'all';
 
@@ -36,21 +37,29 @@ export default function SupportCommandCenter() {
   const [timePeriod, setTimePeriod] = useState<TimePeriod>('30d');
   const [pulseData, setPulseData] = useState<PulseCheck[]>([]);
   const [behaviorLogs, setBehaviorLogs] = useState<AgentBehaviorLog[]>([]);
+  const [tierCategories, setTierCategories] = useState<TierCategory[]>([]);
+  const [totalTicketsAnalyzed, setTotalTicketsAnalyzed] = useState(0);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [pulseRes, behaviorRes] = await Promise.all([
+        const [pulseRes, behaviorRes, tiersRes] = await Promise.all([
           fetch('/api/dashboard?tab=pulse'),
           fetch('/api/dashboard?tab=behavior'),
+          fetch('/api/dashboard?tab=tiers'),
         ]);
-        const [pulseJson, behaviorJson] = await Promise.all([
+        const [pulseJson, behaviorJson, tiersJson] = await Promise.all([
           pulseRes.json(),
           behaviorRes.json(),
+          tiersRes.json(),
         ]);
         if (pulseJson.data) setPulseData(pulseJson.data);
         if (behaviorJson.data) setBehaviorLogs(behaviorJson.data);
+        if (tiersJson.categories) {
+          setTierCategories(tiersJson.categories);
+          setTotalTicketsAnalyzed(tiersJson.totalTicketsAnalyzed ?? 0);
+        }
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -162,6 +171,14 @@ export default function SupportCommandCenter() {
         {/* AGENT BEHAVIOR TAB */}
         {activeTab === 'agent-behavior' && (
           <AgentBehaviorTab logs={behaviorLogs} />
+        )}
+
+        {/* TIER READINESS TAB */}
+        {activeTab === 'tier-readiness' && (
+          <TierReadinessTab
+            totalTicketsAnalyzed={totalTicketsAnalyzed}
+            categories={tierCategories}
+          />
         )}
 
         {/* DEEP DIVE TAB */}

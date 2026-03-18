@@ -8,6 +8,7 @@ interface TabsProps {
 const tabs = [
   { id: 'operations', label: 'Operations' },
   { id: 'agent-behavior', label: 'Agent Behavior' },
+  { id: 'tier-readiness', label: 'Tier Readiness' },
   { id: 'ai-performance', label: 'AI Performance' },
   { id: 'deep-dive', label: 'Deep Dive' },
 ];
