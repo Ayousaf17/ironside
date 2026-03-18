@@ -10,7 +10,7 @@
 //   Secret Token: set GORGIAS_WEBHOOK_SECRET in Vercel env vars (Settings → Integrations → Webhooks)
 
 import { NextResponse, after } from "next/server";
-import { createHmac, timingSafeEqual } from "crypto";
+import { timingSafeEqual } from "crypto";
 import { parseEvent } from "@/lib/gorgias/events";
 import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
@@ -20,19 +20,21 @@ import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
 
 export const maxDuration = 30;
 
-// Gorgias native webhooks send HMAC-SHA256 of the raw body in X-Gorgias-Hmac-SHA256 (base64).
+// Gorgias HTTP Integration does not support HMAC — we use a shared secret token instead.
+// Configure each HTTP Integration in Gorgias to send: X-Webhook-Secret: <GORGIAS_WEBHOOK_SECRET>
 // If GORGIAS_WEBHOOK_SECRET is not set, verification is skipped (allows gradual rollout).
-function verifyGorgiasSignature(rawBody: string, request: Request): boolean {
+function verifyGorgiasSignature(_rawBody: string, request: Request): boolean {
   const secret = process.env.GORGIAS_WEBHOOK_SECRET;
   if (!secret) return true;
 
-  const signature = request.headers.get("x-gorgias-hmac-sha256");
-  if (!signature) return false;
-
-  const computed = createHmac("sha256", secret).update(rawBody).digest("base64");
+  const token = request.headers.get("x-webhook-secret");
+  if (!token) return false;
 
   try {
-    return timingSafeEqual(Buffer.from(computed), Buffer.from(signature));
+    const expected = Buffer.from(secret);
+    const received = Buffer.from(token);
+    if (expected.length !== received.length) return false;
+    return timingSafeEqual(expected, received);
   } catch {
     return false;
   }
