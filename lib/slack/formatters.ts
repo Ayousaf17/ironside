@@ -508,6 +508,131 @@ export function formatSpamChainBlocks(
   return blocks;
 }
 
+// ---- Triage Chain ----
+
+export interface TriageChainInput {
+  grouped: Map<string, { id: number; subject: string; tags: string[]; created_datetime: string; suggestedEmail: string | null }[]>;
+  unclassified: { id: number; subject: string; tags: string[]; created_datetime: string; suggestedEmail: string | null }[];
+  reviewerSlackId: string;
+  assignableCount: number;
+  totalCount: number;
+}
+
+function ticketAge(created_datetime: string): string {
+  const secs = Math.floor((Date.now() - new Date(created_datetime).getTime()) / 1000);
+  if (secs < 3600) return `${Math.floor(secs / 60)}m`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)}h`;
+  return `${Math.floor(secs / 86400)}d`;
+}
+
+function agentDisplayName(email: string): string {
+  return email.split("@")[0]
+    .split(/[-.]/)
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(" ");
+}
+
+export function formatTriageChainBlocks(input: TriageChainInput): object[] {
+  const { grouped, unclassified, reviewerSlackId, assignableCount, totalCount } = input;
+  const blocks: object[] = [];
+
+  // Header
+  blocks.push({
+    type: "header",
+    text: {
+      type: "plain_text",
+      text: `📋 Triage Queue — ${totalCount} unassigned ticket${totalCount !== 1 ? "s" : ""}`,
+      emoji: true,
+    },
+  });
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `Opened by <@${reviewerSlackId}> · Unassigned open tickets · Last 24h window`,
+    },
+  });
+
+  blocks.push({ type: "divider" });
+
+  // Per-agent groups
+  for (const [email, tickets] of grouped.entries()) {
+    const name = agentDisplayName(email);
+    const lines = tickets.slice(0, 10).map((t) => {
+      const subject = t.subject.length > 60 ? `${t.subject.slice(0, 60)}…` : t.subject;
+      const tag = t.tags.find((tg) => !["urgent", "auto-close", "non-support-related"].includes(tg.toLowerCase())) ?? "—";
+      return `• *#${t.id}* — ${subject} _· ${tag} · ${ticketAge(t.created_datetime)} ago_`;
+    });
+    if (tickets.length > 10) lines.push(`_...and ${tickets.length - 10} more_`);
+
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*→ ${name}* (${tickets.length} ticket${tickets.length !== 1 ? "s" : ""})\n${lines.join("\n")}`,
+      },
+    });
+  }
+
+  // Unclassified group
+  if (unclassified.length > 0) {
+    const lines = unclassified.slice(0, 5).map((t) => {
+      const subject = t.subject.length > 60 ? `${t.subject.slice(0, 60)}…` : t.subject;
+      return `• *#${t.id}* — ${subject} _· ${ticketAge(t.created_datetime)} ago_`;
+    });
+    if (unclassified.length > 5) lines.push(`_...and ${unclassified.length - 5} more_`);
+
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*⚠️ Unclassified* (${unclassified.length} ticket${unclassified.length !== 1 ? "s" : ""} — assign manually in Gorgias)\n${lines.join("\n")}`,
+      },
+    });
+  }
+
+  blocks.push({ type: "divider" });
+
+  // Actions
+  const autoAssignText =
+    assignableCount > 0
+      ? `✅ Auto-Assign ${assignableCount} Ticket${assignableCount !== 1 ? "s" : ""}`
+      : "✅ Auto-Assign All";
+
+  const elements: object[] = [];
+
+  if (assignableCount > 0) {
+    elements.push({
+      type: "button",
+      text: { type: "plain_text", text: autoAssignText, emoji: true },
+      style: "primary",
+      action_id: "auto_assign_triage",
+      value: JSON.stringify({ count: assignableCount }),
+      confirm: {
+        title: { type: "plain_text", text: "Auto-assign tickets?" },
+        text: {
+          type: "mrkdwn",
+          text: `This will assign *${assignableCount} ticket${assignableCount !== 1 ? "s" : ""}* in Gorgias based on category routing. Unclassified tickets will be skipped.`,
+        },
+        confirm: { type: "plain_text", text: "Yes, assign" },
+        deny: { type: "plain_text", text: "Cancel" },
+      },
+    });
+  }
+
+  elements.push({
+    type: "button",
+    text: { type: "plain_text", text: "❌ Cancel", emoji: true },
+    action_id: "cancel_triage",
+    value: "{}",
+  });
+
+  blocks.push({ type: "actions", elements });
+
+  return blocks;
+}
+
 interface ApprovalData {
   ticketId: number;
   category: string;

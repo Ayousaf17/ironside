@@ -11,6 +11,11 @@ import {
   handleCloseAllSpam,
   handleCancelSpamReview,
 } from "@/lib/slack/handlers/spam-chain";
+import {
+  handleShowUnassignedTickets,
+  handleAutoAssignTriage,
+  handleCancelTriage,
+} from "@/lib/slack/handlers/triage-chain";
 
 export const maxDuration = 30;
 
@@ -120,16 +125,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true });
   }
 
-  // ── Triage chain placeholders (Phase 3) ─────────────────────────────────
+  // ── Triage chain ─────────────────────────────────────────────────────────
   if (action.action_id === "show_unassigned_tickets") {
-    await sendSlackMessage(
-      "🔄 Triage flow coming in the next update.",
-      channel,
-      threadTs
+    after(() =>
+      handleShowUnassignedTickets({ responseUrl, slackUserId: userId, channel })
     );
     return NextResponse.json({ ok: true });
   }
 
+  if (action.action_id === "auto_assign_triage") {
+    after(() =>
+      handleAutoAssignTriage({ responseUrl, slackUserId: userId })
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action.action_id === "cancel_triage") {
+    after(() =>
+      handleCancelTriage({ responseUrl, slackUserId: userId })
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Urgent placeholder (Phase 5) ─────────────────────────────────────────
   if (action.action_id === "show_urgent_tickets") {
     await sendSlackMessage(
       "🔄 Urgent ticket review coming in the next update.",
