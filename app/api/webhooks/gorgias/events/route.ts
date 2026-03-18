@@ -16,6 +16,7 @@ import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
 import { logApiCall, logApiError } from "@/lib/services/logging.service";
 import { handleNewTicketAlert } from "@/lib/slack/handlers/urgent-alert";
+import { isDuplicate, markSeen, webhookKey } from "@/lib/services/idempotency.service";
 import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
 
 export const maxDuration = 30;
@@ -55,7 +56,8 @@ export async function POST(request: Request) {
 
     // Log the raw webhook for debugging
     const eventType = String(payload.event_type ?? payload.type ?? "unknown");
-    console.log(`[gorgias-webhook] Received event: ${eventType} for ticket ${payload.ticket_id}`);
+    const ticketId = payload.ticket_id ?? "unknown";
+    console.log(`[gorgias-webhook] Received event: ${eventType} for ticket ${ticketId}`);
 
     // Parse the event — auto-detects HTTP Integration vs native webhook format
     let entries = parseEvent(payload);
@@ -74,6 +76,14 @@ export async function POST(request: Request) {
       });
       return NextResponse.json({ ok: true, logged: 0 });
     }
+
+    // Dedup: Gorgias retries on slow/failed responses — skip duplicate agent events within 10 min
+    const idempotencyKey = webhookKey(eventType, String(ticketId));
+    if (isDuplicate(idempotencyKey)) {
+      console.log(`[gorgias-webhook] Duplicate event skipped: ${idempotencyKey}`);
+      return NextResponse.json({ ok: true, skipped: true });
+    }
+    markSeen(idempotencyKey);
 
     // Enrich entries with full ticket data from Gorgias API (graceful degradation)
     if (process.env.GORGIAS_MOCK === "false") {
