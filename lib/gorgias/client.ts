@@ -86,3 +86,12 @@ export async function searchMacros(search?: string): Promise<GorgiasMacro[]> {
   const term = search.toLowerCase();
   return all.filter(m => m.name.toLowerCase().includes(term) || m.tags.some(t => t.toLowerCase().includes(term)));
 }
+
+export async function validateMacroExists(id: number): Promise<boolean> {
+  const macro = await getMacro(id);
+  return macro !== undefined;
+}
+
+export async function getActiveMacros(): Promise<GorgiasMacro[]> {
+  return getMacros(); // already returns only valid macros
+}

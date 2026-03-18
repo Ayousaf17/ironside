@@ -8,6 +8,7 @@
 
 import { DynamicTool } from "@langchain/core/tools";
 import { getTicket, searchTickets, updateTags, assignTicket, setStatus } from "@/lib/gorgias/client";
+import { getAgentEmailForCategory } from "@/lib/services/agent-routing.service";
 
 // Spam detection patterns from real Ironside data (Jan-Feb 2026)
 const SPAM_PATTERNS = [
@@ -35,18 +36,7 @@ interface TicketClassification {
   reason: string;
 }
 
-// Agent routing based on real workload patterns
-const AGENT_ROUTING: Record<string, string> = {
-  track_order: "spencer@ironsidecomputers.com",
-  order_verification: "danni-jean@ironsidecomputers.com",
-  product_question: "spencer@ironsidecomputers.com",
-  report_issue: "spencer@ironsidecomputers.com",
-  return_exchange: "danni-jean@ironsidecomputers.com",
-  order_change_cancel: "danni-jean@ironsidecomputers.com",
-  contact_form: "spencer@ironsidecomputers.com",
-};
-
-function classifyTicket(subject: string, messageText: string): TicketClassification {
+async function classifyTicket(subject: string, messageText: string): Promise<TicketClassification> {
   const combined = `${subject} ${messageText}`.toLowerCase();
 
   // Check spam first
@@ -68,7 +58,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "report_issue",
       suggestedTags: ["urgent"],
       suggestedPriority: "critical",
-      suggestedAgent: "spencer@ironsidecomputers.com",
+      suggestedAgent: await getAgentEmailForCategory("report_issue"),
       reason: "Water cooling issue detected — potential hardware damage",
     };
   }
@@ -79,7 +69,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "report_issue",
       suggestedTags: ["urgent"],
       suggestedPriority: "critical",
-      suggestedAgent: "spencer@ironsidecomputers.com",
+      suggestedAgent: await getAgentEmailForCategory("report_issue"),
       reason: "DOA / no power issue — critical hardware failure",
     };
   }
@@ -92,7 +82,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "track_order",
       suggestedTags: ["ORDER-STATUS", ...(isOverdue ? ["urgent"] : [])],
       suggestedPriority: isOverdue ? "high" : "normal",
-      suggestedAgent: AGENT_ROUTING.track_order,
+      suggestedAgent: await getAgentEmailForCategory("track_order"),
       reason: isOverdue ? "Order status inquiry — customer indicates overdue" : "Standard order status inquiry",
     };
   }
@@ -104,7 +94,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "order_verification",
       suggestedTags: ["ORDER-STATUS", ...(isStuck ? ["urgent"] : [])],
       suggestedPriority: isStuck ? "high" : "normal",
-      suggestedAgent: AGENT_ROUTING.order_verification,
+      suggestedAgent: await getAgentEmailForCategory("order_verification"),
       reason: isStuck ? "Verification stuck — customer already submitted docs" : "Standard verification inquiry",
     };
   }
@@ -115,7 +105,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "return_exchange",
       suggestedTags: ["RETURN/EXCHANGE"],
       suggestedPriority: "normal",
-      suggestedAgent: AGENT_ROUTING.return_exchange,
+      suggestedAgent: await getAgentEmailForCategory("return_exchange"),
       reason: "Return or exchange request",
     };
   }
@@ -126,7 +116,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "order_change_cancel",
       suggestedTags: ["ORDER-CHANGE/CANCEL"],
       suggestedPriority: "normal",
-      suggestedAgent: AGENT_ROUTING.order_change_cancel,
+      suggestedAgent: await getAgentEmailForCategory("order_change_cancel"),
       reason: "Order change or cancellation request",
     };
   }
@@ -138,7 +128,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "report_issue",
       suggestedTags: ["urgent"],
       suggestedPriority: "high",
-      suggestedAgent: AGENT_ROUTING.report_issue,
+      suggestedAgent: await getAgentEmailForCategory("report_issue"),
       reason: isDriverIssue ? "Driver/connectivity issue — common post-delivery problem" : "Hardware or software issue reported",
     };
   }
@@ -149,7 +139,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "product_question",
       suggestedTags: [],
       suggestedPriority: "normal",
-      suggestedAgent: AGENT_ROUTING.product_question,
+      suggestedAgent: await getAgentEmailForCategory("product_question"),
       reason: "Pre-sale product inquiry",
     };
   }
@@ -160,7 +150,7 @@ function classifyTicket(subject: string, messageText: string): TicketClassificat
       category: "contact_form",
       suggestedTags: [],
       suggestedPriority: "normal",
-      suggestedAgent: AGENT_ROUTING.contact_form,
+      suggestedAgent: await getAgentEmailForCategory("contact_form"),
       reason: "Contact form submission — needs manual review",
     };
   }
@@ -199,7 +189,7 @@ export const sw4TriageTool = new DynamicTool({
           if (!ticket) return JSON.stringify({ error: `Ticket ${params.ticket_id} not found` });
 
           const firstMessage = ticket.messages[0]?.body_text || "";
-          const classification = classifyTicket(ticket.subject, firstMessage);
+          const classification = await classifyTicket(ticket.subject, firstMessage);
 
           return JSON.stringify({
             ticket_id: ticket.id,
@@ -219,7 +209,7 @@ export const sw4TriageTool = new DynamicTool({
           if (!ticket) return JSON.stringify({ error: `Ticket ${params.ticket_id} not found` });
 
           const firstMessage = ticket.messages[0]?.body_text || "";
-          const classification = classifyTicket(ticket.subject, firstMessage);
+          const classification = await classifyTicket(ticket.subject, firstMessage);
           const actions: string[] = [];
 
           // Apply tags if we have suggestions and ticket doesn't already have them
@@ -262,7 +252,7 @@ export const sw4TriageTool = new DynamicTool({
           const results = [];
           for (const ticket of unassigned) {
             const firstMessage = ticket.messages[0]?.body_text || "";
-            const classification = classifyTicket(ticket.subject, firstMessage);
+            const classification = await classifyTicket(ticket.subject, firstMessage);
             const actions: string[] = [];
 
             // Apply tags

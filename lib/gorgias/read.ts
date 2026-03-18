@@ -26,6 +26,37 @@ function getBaseUrl(): string {
   return baseUrl.replace(/\/$/, "");
 }
 
+async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<GorgiasTicket[]> {
+  const all: GorgiasTicket[] = [];
+  let cursor: string | null = null;
+  let baseUrl: string = startUrl.split("?")[0];
+  const initialParams: string = startUrl.includes("?") ? startUrl.slice(startUrl.indexOf("?") + 1) : "";
+  let isFirst = true;
+
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    let fetchUrl: string;
+    if (isFirst) {
+      fetchUrl = startUrl;
+      isFirst = false;
+    } else if (cursor) {
+      const params = new URLSearchParams(initialParams);
+      params.set("cursor", cursor);
+      fetchUrl = `${baseUrl}?${params.toString()}`;
+    } else {
+      break;
+    }
+
+    const pageRes = await fetch(fetchUrl, { headers });
+    if (!pageRes.ok) throw new Error(`Gorgias API error: ${pageRes.status} ${pageRes.statusText}`);
+    const pageData = await pageRes.json() as { data: GorgiasTicket[]; meta?: { next_cursor?: string } };
+    all.push(...pageData.data);
+    cursor = pageData.meta?.next_cursor ?? null;
+    if (!cursor) break;
+  }
+  return all;
+}
+
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
   const params = new URLSearchParams();
   if (options.updatedAfter) {
@@ -33,10 +64,7 @@ export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promi
   }
   const query = params.toString();
   const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
-  const res = await fetch(url, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
-  const data = await res.json();
-  return data.data as GorgiasTicket[];
+  return fetchAllPages(url, getAuthHeaders());
 }
 
 export async function fetchTicket(id: number): Promise<GorgiasTicket | undefined> {
@@ -55,10 +83,7 @@ export async function searchTickets(filters: TicketSearchFilters = {}): Promise<
 
   const query = params.toString();
   const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
-  const res = await fetch(url, { headers: getAuthHeaders() });
-  if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
-  const data = await res.json();
-  let tickets = data.data as GorgiasTicket[];
+  let tickets = await fetchAllPages(url, getAuthHeaders());
 
   // Client-side text search (Gorgias list API doesn't have a text search param)
   if (filters.search) {

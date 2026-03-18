@@ -5,6 +5,7 @@ import { sendSlackMessage } from "@/lib/slack/client";
 import { setStatus, assignTicket, updateTags } from "@/lib/gorgias/client";
 import { withRetry } from "@/lib/services/retry.service";
 import { logCronError } from "@/lib/services/logging.service";
+import { getAgentEmailByName } from "@/lib/services/agent-routing.service";
 
 export const maxDuration = 30;
 
@@ -42,13 +43,17 @@ async function executeAction(
       await withRetry(() => setStatus(ticketId, "closed"));
       return `Closed ticket #${ticketId}`;
 
-    case "assign_spencer":
-      await withRetry(() => assignTicket(ticketId, "spencer@ironsidecomputers.com"));
+    case "assign_spencer": {
+      const spencerEmail = await getAgentEmailByName("spencer");
+      await withRetry(() => assignTicket(ticketId, spencerEmail));
       return `Assigned ticket #${ticketId} to Spencer`;
+    }
 
-    case "assign_danni":
-      await withRetry(() => assignTicket(ticketId, "danni-jean@ironsidecomputers.com"));
+    case "assign_danni": {
+      const danniEmail = await getAgentEmailByName("danni");
+      await withRetry(() => assignTicket(ticketId, danniEmail));
       return `Assigned ticket #${ticketId} to Danni-Jean`;
+    }
 
     default:
       return `Unknown action: ${action}`;
