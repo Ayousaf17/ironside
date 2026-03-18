@@ -45,10 +45,25 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
 
   const classification = await classifyTicket(subject, lastMessage);
 
-  // Spam → auto-close silently, no Slack noise
+  // Spam → auto-close AND notify #ops so you can reopen if it's a false positive
   if (classification.category === "spam") {
     await setStatus(ticketId, "closed");
     console.log(`[auto-triage] Ticket #${ticketId} auto-closed as spam`);
+    await sendSlackBlocks(
+      `🗑️ Auto-closed spam ticket #${ticketId}`,
+      [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `🗑️ *Auto-closed as spam — Ticket #${ticketId}*\n${subject}\n_Reason: ${classification.reason}_\n\nIf this was a real customer, reopen it in Gorgias.`,
+          },
+        },
+      ],
+      undefined,
+      undefined,
+      "ops",
+    );
     return;
   }
 

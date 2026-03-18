@@ -42,7 +42,7 @@ describe("handleAutoTriage", () => {
     jest.clearAllMocks();
   });
 
-  it("auto-closes spam tickets silently", async () => {
+  it("auto-closes spam and posts a visible Slack notice so it can be reopened if wrong", async () => {
     mockClassify.mockResolvedValue({
       category: "spam",
       suggestedTags: ["auto-close"],
@@ -54,7 +54,10 @@ describe("handleAutoTriage", () => {
     await handleAutoTriage(makePayload({ subject: "Business funding offer" }));
 
     expect(mockSetStatus).toHaveBeenCalledWith(99999, "closed");
-    expect(mockSlack).not.toHaveBeenCalled();
+    // Should post a visible notice so ops can reopen false positives
+    expect(mockSlack).toHaveBeenCalledTimes(1);
+    const [text] = mockSlack.mock.calls[0];
+    expect(text).toContain("spam");
   });
 
   it("classifies, tags, assigns, and posts Slack card for track_order", async () => {
