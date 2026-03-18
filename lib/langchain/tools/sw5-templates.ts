@@ -9,7 +9,7 @@
 import { DynamicTool } from "@langchain/core/tools";
 import { getTicket, replyPublic, commentInternal, getMacros, getMacro } from "@/lib/gorgias/client";
 
-interface Template {
+export interface Template {
   id: string;
   name: string;
   category: string;
@@ -17,7 +17,7 @@ interface Template {
   internalNote?: string; // optional internal note added alongside
 }
 
-const TEMPLATES: Template[] = [
+export const TEMPLATES: Template[] = [
   // ---- Track Order ----
   {
     id: "order_status_in_build",
@@ -155,7 +155,7 @@ const TEMPLATES: Template[] = [
   },
 ];
 
-function fillTemplate(template: Template, customerName: string): { body: string; internalNote?: string } {
+export function fillTemplate(template: Template, customerName: string): { body: string; internalNote?: string } {
   const body = template.body.replace(/\{\{customer_name\}\}/g, customerName || "there");
   const internalNote = template.internalNote?.replace(/\{\{customer_name\}\}/g, customerName || "customer");
   return { body, internalNote };
