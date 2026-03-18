@@ -822,3 +822,60 @@ export function formatApprovalBlocks(data: ApprovalData) {
     },
   ];
 }
+
+// --- Phase 5: Real-time urgent ticket alert ---
+
+export interface UrgentTicketBlocksInput {
+  ticketId: number;
+  subject: string;
+  tags: string[];
+  customerName: string;
+  channel: string;
+  urgencyReason: string;
+  severity: "critical" | "high";
+}
+
+export function formatUrgentTicketBlocks(input: UrgentTicketBlocksInput): object[] {
+  const { ticketId, subject, tags, customerName, channel, urgencyReason, severity } = input;
+  const emoji = severity === "critical" ? "🚨" : "⚠️";
+  const severityLabel = severity === "critical" ? "CRITICAL" : "HIGH";
+
+  const blocks: object[] = [];
+
+  blocks.push({
+    type: "header",
+    text: { type: "plain_text", text: `${emoji} Urgent Ticket Alert`, emoji: true },
+  });
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `*#${ticketId}* — ${subject}\n_${customerName} · via ${channel}_`,
+    },
+    accessory: {
+      type: "button",
+      text: { type: "plain_text", text: "Reply →" },
+      action_id: "open_reply_modal",
+      value: JSON.stringify({ ticketId, tags, subject: subject.slice(0, 100) }),
+      style: "danger",
+    },
+  });
+
+  blocks.push({
+    type: "section",
+    fields: [
+      { type: "mrkdwn", text: `*Severity:*\n\`${severityLabel}\`` },
+      { type: "mrkdwn", text: `*Reason:*\n${urgencyReason}` },
+    ],
+  });
+
+  if (tags.length > 0) {
+    blocks.push({
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `Tags: ${tags.map(t => `\`${t}\``).join(" ")}` }],
+    });
+  }
+
+  return blocks;
+}

@@ -8,11 +8,13 @@
 //   URL: https://ironside-alpha.vercel.app/api/webhooks/gorgias/events
 //   Events: ticket-created, ticket-updated, ticket-message-created
 
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { parseEvent } from "@/lib/gorgias/events";
 import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
 import { logApiCall, logApiError } from "@/lib/services/logging.service";
+import { handleNewTicketAlert } from "@/lib/slack/handlers/urgent-alert";
+import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
 
 export const maxDuration = 30;
 
@@ -69,6 +71,16 @@ export async function POST(request: Request) {
     });
 
     console.log(`[gorgias-webhook] Logged ${count} behavior entries for ticket ${payload.ticket_id}`);
+
+    // Phase 5: Real-time urgent alert for new tickets
+    if (eventType === "ticket-created") {
+      after(
+        handleNewTicketAlert(payload as unknown as GorgiasHttpIntegrationPayload).catch(
+          (err) => console.error("[gorgias-webhook] Urgent alert failed:", err),
+        ),
+      );
+    }
+
     return NextResponse.json({ ok: true, logged: count });
 
   } catch (err) {
