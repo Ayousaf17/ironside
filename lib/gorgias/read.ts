@@ -29,11 +29,10 @@ function getBaseUrl(): string {
 async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<GorgiasTicket[]> {
   const all: GorgiasTicket[] = [];
   let cursor: string | null = null;
-  let baseUrl: string = startUrl.split("?")[0];
+  const baseUrl: string = startUrl.split("?")[0];
   const initialParams: string = startUrl.includes("?") ? startUrl.slice(startUrl.indexOf("?") + 1) : "";
   let isFirst = true;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     let fetchUrl: string;
     if (isFirst) {

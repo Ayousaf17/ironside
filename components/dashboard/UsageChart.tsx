@@ -2,7 +2,7 @@
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Legend } from "recharts";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-export function UsageChart({ data }: { data: any[] }) {
+export function UsageChart({ data }: { data: Record<string, unknown>[] }) {
   return (
     <Card className="col-span-4">
       <CardHeader>
