@@ -215,6 +215,190 @@ export function formatEscalationAlert(
   return lines.join("\n");
 }
 
+export interface PulseCheckBlocksInput {
+  summary: string;
+  analytics: {
+    totalTickets: number;
+    openTickets: number;
+    closedTickets: number;
+    spamRate: number; // integer percentage (0-100)
+    avgResolutionMinutes: number | null;
+    p50ResolutionMinutes: number | null;
+    p90ResolutionMinutes: number | null;
+    topQuestions: { question: string; count: number }[];
+    agentBreakdown: { agent: string; ticketCount: number; closeRate: number }[];
+    spamCount: number;
+    unassignedCount: number;
+    urgentCount: number;
+  };
+  dateRangeStart: Date;
+  dateRangeEnd: Date;
+}
+
+export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
+  const { summary, analytics, dateRangeStart, dateRangeEnd } = input;
+
+  const fmt = (d: Date) =>
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const dateRange = `${fmt(dateRangeStart)} – ${fmt(dateRangeEnd)}`;
+
+  const blocks: object[] = [];
+
+  // Header
+  blocks.push({
+    type: "header",
+    text: { type: "plain_text", text: "📊 Support Pulse Check", emoji: true },
+  });
+
+  // Date range + total
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `_${dateRange} • ${analytics.totalTickets} tickets_`,
+    },
+  });
+
+  // Stats fields
+  const resolutionText =
+    analytics.avgResolutionMinutes !== null
+      ? `Avg ${analytics.avgResolutionMinutes}min • P50: ${analytics.p50ResolutionMinutes ?? "–"}min • P90: ${analytics.p90ResolutionMinutes ?? "–"}min`
+      : "_No closed tickets with agent responses_";
+
+  blocks.push({
+    type: "section",
+    fields: [
+      {
+        type: "mrkdwn",
+        text: `*Status:*\nOpen: ${analytics.openTickets} | Closed: ${analytics.closedTickets}`,
+      },
+      {
+        type: "mrkdwn",
+        text: `*Spam:*\n${analytics.spamCount} tickets (${analytics.spamRate}%) — auto-closed`,
+      },
+      {
+        type: "mrkdwn",
+        text: `*Real Support:*\n${analytics.totalTickets - analytics.spamCount} tickets`,
+      },
+      {
+        type: "mrkdwn",
+        text: `*Resolution:*\n${resolutionText}`,
+      },
+    ],
+  });
+
+  // Top Questions
+  if (analytics.topQuestions.length > 0) {
+    const top3 = analytics.topQuestions.slice(0, 3);
+    const questionLines = top3
+      .map((q, i) => `${i + 1}. "${q.question}" — ${q.count} tickets`)
+      .join("\n");
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Top Questions:*\n${questionLines}` },
+    });
+  }
+
+  // Workload
+  if (analytics.agentBreakdown.length > 0) {
+    const workloadLines = analytics.agentBreakdown
+      .map((a) => `• ${a.agent}: ${a.ticketCount} tickets (${a.closeRate}% close rate)`)
+      .join("\n");
+    blocks.push({
+      type: "section",
+      text: { type: "mrkdwn", text: `*Workload:*\n${workloadLines}` },
+    });
+  }
+
+  // Action Items — extract numbered items from LLM summary
+  const summaryLines = summary.split("\n");
+  const actionStartIdx = summaryLines.findIndex((l) =>
+    l.includes("Action Items")
+  );
+  const actionItems: string[] = [];
+  if (actionStartIdx !== -1) {
+    for (
+      let i = actionStartIdx + 1;
+      i < summaryLines.length && actionItems.length < 3;
+      i++
+    ) {
+      const match = summaryLines[i].match(/^\d+\.\s*(.+)/);
+      if (match) actionItems.push(match[1].trim());
+    }
+  }
+  if (actionItems.length > 0) {
+    const actionLines = actionItems
+      .map((item, i) => `${i + 1}. ${item}`)
+      .join("\n");
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*:rotating_light: Action Items:*\n${actionLines}`,
+      },
+    });
+  }
+
+  blocks.push({ type: "divider" });
+
+  // Dynamic action buttons
+  const buttons: object[] = [];
+
+  if (analytics.spamCount > 0) {
+    buttons.push({
+      type: "button",
+      text: {
+        type: "plain_text",
+        text: `🗑️ Review ${analytics.spamCount} Spam Tickets`,
+        emoji: true,
+      },
+      action_id: "show_spam_tickets",
+      value: JSON.stringify({ count: analytics.spamCount }),
+    });
+  }
+
+  if (analytics.unassignedCount > 5) {
+    buttons.push({
+      type: "button",
+      text: {
+        type: "plain_text",
+        text: `📋 Triage ${analytics.unassignedCount} Unassigned`,
+        emoji: true,
+      },
+      action_id: "show_unassigned_tickets",
+      value: JSON.stringify({ count: analytics.unassignedCount }),
+    });
+  }
+
+  if (analytics.urgentCount > 0) {
+    buttons.push({
+      type: "button",
+      text: {
+        type: "plain_text",
+        text: `🔴 Review ${analytics.urgentCount} Urgent`,
+        emoji: true,
+      },
+      action_id: "show_urgent_tickets",
+      value: JSON.stringify({ count: analytics.urgentCount }),
+      style: "danger",
+    });
+  }
+
+  if (buttons.length > 0) {
+    blocks.push({ type: "actions", elements: buttons });
+  } else {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: "✅ Queue looks healthy — no immediate actions needed",
+      },
+    });
+  }
+
+  return blocks;
+}
+
 interface ApprovalData {
   ticketId: number;
   category: string;

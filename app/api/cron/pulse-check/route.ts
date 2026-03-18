@@ -3,7 +3,8 @@ import { createPulseCheck } from "@/lib/repos/pulse-check.repo";
 import { logCronError } from "@/lib/services/logging.service";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
-import { sendSlackMessage } from "@/lib/slack/client";
+import { sendSlackBlocks, sendSlackMessage } from "@/lib/slack/client";
+import { formatPulseCheckBlocks } from "@/lib/slack/formatters";
 import { getTickets } from "@/lib/gorgias/client";
 import { calculateAnalytics } from "@/lib/analytics/calculate";
 import { HumanMessage } from "@langchain/core/messages";
@@ -96,8 +97,19 @@ export async function GET(request: Request) {
 
     const opsNotes = extractOpsNotes(summary);
 
-    // 3. Send to Slack
-    await sendSlackMessage(summary);
+    // 3. Send to Slack as Block Kit
+    const blocks = formatPulseCheckBlocks({
+      summary,
+      analytics: {
+        ...analytics,
+        spamCount: analytics.spamCount,
+        unassignedCount: analytics.unassignedCount,
+        urgentCount: 0, // Phase 5 will wire this up
+      },
+      dateRangeStart: twentyFourHoursAgo,
+      dateRangeEnd: now,
+    });
+    await sendSlackBlocks(summary, blocks, undefined, undefined, "ops");
 
     // 4. Persist — structured fields + raw blob + LLM summary
     await createPulseCheck({

@@ -102,6 +102,34 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid action value" }, { status: 400 });
   }
 
+  // Phase 1 placeholder handlers — pulse check action buttons
+  if (action.action_id === "show_spam_tickets") {
+    await sendSlackMessage(
+      `🔄 Spam ticket review coming in next update. For now, check Gorgias directly.`,
+      channel,
+      threadTs
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action.action_id === "show_unassigned_tickets") {
+    await sendSlackMessage(
+      `🔄 Triage flow coming in next update.`,
+      channel,
+      threadTs
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action.action_id === "show_urgent_tickets") {
+    await sendSlackMessage(
+      `🔄 Urgent ticket review coming in next update.`,
+      channel,
+      threadTs
+    );
+    return NextResponse.json({ ok: true });
+  }
+
   const approved = action.action_id === "approve_action";
 
   try {
