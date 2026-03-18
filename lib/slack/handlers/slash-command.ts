@@ -65,7 +65,7 @@ async function handleStats(): Promise<SlashResult> {
         { type: "mrkdwn", text: `*Total Tickets:*\n${latest.ticketCount ?? "—"}` },
         { type: "mrkdwn", text: `*Open / Closed:*\n${latest.openTickets ?? "—"} / ${latest.closedTickets ?? "—"}` },
         { type: "mrkdwn", text: `*P90 Resolution:*\n${latest.resolutionP90Min != null ? `${latest.resolutionP90Min.toFixed(0)} min` : "—"}` },
-        { type: "mrkdwn", text: `*Unassigned:*\n${latest.unassignedPct != null ? `${(latest.unassignedPct * 100).toFixed(1)}%` : "—"}` },
+        { type: "mrkdwn", text: `*Unassigned:*\n${latest.unassignedPct != null ? `${latest.unassignedPct.toFixed(1)}%` : "—"}` },
         { type: "mrkdwn", text: `*Top Category:*\n${latest.topCategory ?? "—"}` },
         { type: "mrkdwn", text: `*Last Updated:*\n${date}` },
       ],
