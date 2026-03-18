@@ -28,7 +28,7 @@ const SPAM_PATTERNS = [
 ];
 
 // Category detection from subject + message content
-interface TicketClassification {
+export interface TicketClassification {
   category: "track_order" | "order_verification" | "product_question" | "report_issue" | "return_exchange" | "order_change_cancel" | "contact_form" | "spam" | "other";
   suggestedTags: string[];
   suggestedPriority: "critical" | "high" | "normal" | "low";
@@ -36,7 +36,7 @@ interface TicketClassification {
   reason: string;
 }
 
-async function classifyTicket(subject: string, messageText: string): Promise<TicketClassification> {
+export async function classifyTicket(subject: string, messageText: string): Promise<TicketClassification> {
   const combined = `${subject} ${messageText}`.toLowerCase();
 
   // Check spam first

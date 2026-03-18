@@ -16,6 +16,7 @@ import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
 import { logApiCall, logApiError } from "@/lib/services/logging.service";
 import { handleNewTicketAlert } from "@/lib/slack/handlers/urgent-alert";
+import { handleAutoTriage } from "@/lib/slack/handlers/auto-triage";
 import { notifyDeadLetter } from "@/lib/slack/handlers/dead-letter";
 import { isDuplicate, markSeen, webhookKey } from "@/lib/services/idempotency.service";
 import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
@@ -114,8 +115,15 @@ export async function POST(request: Request) {
 
     console.log(`[gorgias-webhook] Logged ${count} behavior entries for ticket ${payload.ticket_id}`);
 
-    // Phase 5: Real-time urgent alert for new tickets
+    // Real-time processing for new tickets
     if (eventType === "ticket-created") {
+      // Auto-triage: classify, tag, assign, post Slack card
+      after(
+        handleAutoTriage(payload as unknown as GorgiasHttpIntegrationPayload).catch(
+          (err) => console.error("[gorgias-webhook] Auto-triage failed:", err),
+        ),
+      );
+      // Urgent alert (critical/safety patterns only)
       after(
         handleNewTicketAlert(payload as unknown as GorgiasHttpIntegrationPayload).catch(
           (err) => console.error("[gorgias-webhook] Urgent alert failed:", err),
