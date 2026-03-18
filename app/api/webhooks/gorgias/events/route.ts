@@ -7,8 +7,10 @@
 // Setup in Gorgias: Settings → Webhooks → Add:
 //   URL: https://ironside-alpha.vercel.app/api/webhooks/gorgias/events
 //   Events: ticket-created, ticket-updated, ticket-message-created
+//   Secret Token: set GORGIAS_WEBHOOK_SECRET in Vercel env vars (Settings → Integrations → Webhooks)
 
 import { NextResponse, after } from "next/server";
+import { timingSafeEqual } from "crypto";
 import { parseEvent } from "@/lib/gorgias/events";
 import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
@@ -18,14 +20,41 @@ import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
 
 export const maxDuration = 30;
 
+// Gorgias HTTP Integration does not support HMAC — we use a shared secret token instead.
+// Configure each HTTP Integration in Gorgias to send: X-Webhook-Secret: <GORGIAS_WEBHOOK_SECRET>
+// If GORGIAS_WEBHOOK_SECRET is not set, verification is skipped (allows gradual rollout).
+function verifyGorgiasSignature(_rawBody: string, request: Request): boolean {
+  const secret = process.env.GORGIAS_WEBHOOK_SECRET;
+  if (!secret) return true;
+
+  const token = request.headers.get("x-webhook-secret");
+  if (!token) return false;
+
+  try {
+    const expected = Buffer.from(secret);
+    const received = Buffer.from(token);
+    if (expected.length !== received.length) return false;
+    return timingSafeEqual(expected, received);
+  } catch {
+    return false;
+  }
+}
+
 export async function POST(request: Request) {
   const startTime = Date.now();
 
   try {
-    const payload = await request.json();
+    const rawBody = await request.text();
+
+    if (!verifyGorgiasSignature(rawBody, request)) {
+      console.warn("[gorgias-webhook] Signature verification failed — rejecting request");
+      return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
+    }
+
+    const payload = JSON.parse(rawBody) as Record<string, unknown>;
 
     // Log the raw webhook for debugging
-    const eventType = payload.event_type || payload.type || "unknown";
+    const eventType = String(payload.event_type ?? payload.type ?? "unknown");
     console.log(`[gorgias-webhook] Received event: ${eventType} for ticket ${payload.ticket_id}`);
 
     // Parse the event — auto-detects HTTP Integration vs native webhook format
