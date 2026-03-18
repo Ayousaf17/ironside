@@ -14,7 +14,8 @@ import P90TrendChart from '@/components/dashboard/P90TrendChart';
 import OpsNotesHistory from '@/components/dashboard/OpsNotesHistory';
 import TicketFlowPanel from '@/components/dashboard/TicketFlowPanel';
 import AgentBehaviorTab, { type AgentBehaviorLog } from '@/components/dashboard/AgentBehaviorTab';
-import TierReadinessTab, { type TierCategory } from '@/components/dashboard/TierReadinessTab';
+import AutomationControlTab from '@/components/dashboard/AutomationControlTab';
+import { type TierCategory } from '@/components/dashboard/TierReadinessTab';
 import AiPerformanceTab, { type AiAnalytics } from '@/components/dashboard/AiPerformanceTab';
 
 type TimePeriod = '7d' | '30d' | '90d' | 'all';
@@ -178,9 +179,9 @@ export default function SupportCommandCenter() {
           <AgentBehaviorTab logs={behaviorLogs} />
         )}
 
-        {/* TIER READINESS TAB */}
-        {activeTab === 'tier-readiness' && (
-          <TierReadinessTab
+        {/* AUTOMATION CONTROL TAB */}
+        {activeTab === 'automation-control' && (
+          <AutomationControlTab
             totalTicketsAnalyzed={totalTicketsAnalyzed}
             categories={tierCategories}
           />
