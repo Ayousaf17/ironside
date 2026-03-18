@@ -14,9 +14,9 @@ function isMockMode(): boolean {
   return process.env.GORGIAS_MOCK !== "false";
 }
 
-export async function getTickets(): Promise<GorgiasTicket[]> {
+export async function getTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
   if (isMockMode()) return getMockTickets();
-  return fetchTickets();
+  return fetchTickets(options);
 }
 
 export async function getTicket(id: number): Promise<GorgiasTicket | undefined> {

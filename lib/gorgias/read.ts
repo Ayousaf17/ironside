@@ -26,8 +26,14 @@ function getBaseUrl(): string {
   return baseUrl.replace(/\/$/, "");
 }
 
-export async function fetchTickets(): Promise<GorgiasTicket[]> {
-  const res = await fetch(`${getBaseUrl()}/api/tickets`, { headers: getAuthHeaders() });
+export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
+  const params = new URLSearchParams();
+  if (options.updatedAfter) {
+    params.set("updated_datetime_after", options.updatedAfter.toISOString());
+  }
+  const query = params.toString();
+  const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
+  const res = await fetch(url, { headers: getAuthHeaders() });
   if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
   const data = await res.json();
   return data.data as GorgiasTicket[];
