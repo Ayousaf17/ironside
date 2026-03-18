@@ -16,6 +16,11 @@ import {
   handleAutoAssignTriage,
   handleCancelTriage,
 } from "@/lib/slack/handlers/triage-chain";
+import {
+  handleOpenReplyModal,
+  handleMacroSelect,
+  handleReplySubmit,
+} from "@/lib/slack/handlers/reply-chain";
 
 export const maxDuration = 30;
 
@@ -86,6 +91,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
+  // ── Reply modal submission ────────────────────────────────────────────────
+  if (payload.type === "view_submission" && payload.view?.callback_id === "reply_modal") {
+    const userId = payload.user?.id ?? "unknown";
+    after(() => handleReplySubmit({ viewPayload: payload.view, slackUserId: userId }));
+    return NextResponse.json({}); // empty body closes the modal
+  }
+
   if (payload.type !== "block_actions") {
     return NextResponse.json({ ok: true });
   }
@@ -144,6 +156,32 @@ export async function POST(request: NextRequest) {
     after(() =>
       handleCancelTriage({ responseUrl, slackUserId: userId })
     );
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Reply chain ──────────────────────────────────────────────────────────
+  // open_reply_modal: handled synchronously — trigger_id expires in ~3s
+  if (action.action_id === "open_reply_modal") {
+    const { ticketId, tags } = JSON.parse(action.value) as { ticketId: number; tags: string[] };
+    try {
+      await handleOpenReplyModal({ triggerId: payload.trigger_id, ticketId, tags });
+    } catch (err) {
+      console.error("[slack/interactivity] handleOpenReplyModal failed:", err);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // select_macro: handled synchronously — user is waiting for modal to update
+  if (action.action_id === "select_macro" && payload.view) {
+    const selectedMacroId = parseInt((action.selected_option as { value: string })?.value ?? "0", 10);
+    const viewId: string = payload.view.id;
+    const viewHash: string = payload.view.hash;
+    const { ticketId } = JSON.parse(payload.view.private_metadata ?? "{}") as { ticketId: number };
+    try {
+      await handleMacroSelect({ viewId, viewHash, selectedMacroId, ticketId });
+    } catch (err) {
+      console.error("[slack/interactivity] handleMacroSelect failed:", err);
+    }
     return NextResponse.json({ ok: true });
   }
 

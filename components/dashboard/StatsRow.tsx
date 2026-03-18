@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { formatCurrency } from "@/lib/utils";
 import { Activity, DollarSign, Users, Zap } from "lucide-react";
 
-export function StatsRow({ stats }: { stats: any }) {
+export function StatsRow({ stats }: { stats: Record<string, unknown> }) {
   return (
     <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
       <Card>

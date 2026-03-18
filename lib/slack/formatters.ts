@@ -556,40 +556,65 @@ export function formatTriageChainBlocks(input: TriageChainInput): object[] {
 
   blocks.push({ type: "divider" });
 
-  // Per-agent groups
+  // Per-agent groups — each ticket as its own section with a Reply button
   for (const [email, tickets] of grouped.entries()) {
     const name = agentDisplayName(email);
-    const lines = tickets.slice(0, 10).map((t) => {
-      const subject = t.subject.length > 60 ? `${t.subject.slice(0, 60)}…` : t.subject;
-      const tag = t.tags.find((tg) => !["urgent", "auto-close", "non-support-related"].includes(tg.toLowerCase())) ?? "—";
-      return `• *#${t.id}* — ${subject} _· ${tag} · ${ticketAge(t.created_datetime)} ago_`;
-    });
-    if (tickets.length > 10) lines.push(`_...and ${tickets.length - 10} more_`);
 
     blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*→ ${name}* (${tickets.length} ticket${tickets.length !== 1 ? "s" : ""})\n${lines.join("\n")}`,
-      },
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `*→ ${name}* (${tickets.length} ticket${tickets.length !== 1 ? "s" : ""})` }],
     });
+
+    const shown = tickets.slice(0, 8);
+    for (const t of shown) {
+      const subject = t.subject.length > 55 ? `${t.subject.slice(0, 55)}…` : t.subject;
+      const tag = t.tags.find((tg) => !["urgent", "auto-close", "non-support-related"].includes(tg.toLowerCase())) ?? "—";
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*#${t.id}* — ${subject}\n_${tag} · ${ticketAge(t.created_datetime)} ago_` },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "Reply →" },
+          action_id: "open_reply_modal",
+          value: JSON.stringify({ ticketId: t.id, tags: t.tags, subject: t.subject.slice(0, 100) }),
+        },
+      });
+    }
+    if (tickets.length > 8) {
+      blocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: `_…and ${tickets.length - 8} more — open Gorgias to reply_` }],
+      });
+    }
   }
 
   // Unclassified group
   if (unclassified.length > 0) {
-    const lines = unclassified.slice(0, 5).map((t) => {
-      const subject = t.subject.length > 60 ? `${t.subject.slice(0, 60)}…` : t.subject;
-      return `• *#${t.id}* — ${subject} _· ${ticketAge(t.created_datetime)} ago_`;
-    });
-    if (unclassified.length > 5) lines.push(`_...and ${unclassified.length - 5} more_`);
-
     blocks.push({
-      type: "section",
-      text: {
-        type: "mrkdwn",
-        text: `*⚠️ Unclassified* (${unclassified.length} ticket${unclassified.length !== 1 ? "s" : ""} — assign manually in Gorgias)\n${lines.join("\n")}`,
-      },
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `*⚠️ Unclassified* (${unclassified.length} ticket${unclassified.length !== 1 ? "s" : ""} — no routing match)` }],
     });
+
+    const shown = unclassified.slice(0, 5);
+    for (const t of shown) {
+      const subject = t.subject.length > 55 ? `${t.subject.slice(0, 55)}…` : t.subject;
+      blocks.push({
+        type: "section",
+        text: { type: "mrkdwn", text: `*#${t.id}* — ${subject}\n_${ticketAge(t.created_datetime)} ago_` },
+        accessory: {
+          type: "button",
+          text: { type: "plain_text", text: "Reply →" },
+          action_id: "open_reply_modal",
+          value: JSON.stringify({ ticketId: t.id, tags: t.tags, subject: t.subject.slice(0, 100) }),
+        },
+      });
+    }
+    if (unclassified.length > 5) {
+      blocks.push({
+        type: "context",
+        elements: [{ type: "mrkdwn", text: `_…and ${unclassified.length - 5} more_` }],
+      });
+    }
   }
 
   blocks.push({ type: "divider" });
@@ -631,6 +656,105 @@ export function formatTriageChainBlocks(input: TriageChainInput): object[] {
   blocks.push({ type: "actions", elements });
 
   return blocks;
+}
+
+// ---- Reply Modal ----
+
+interface MacroOption {
+  id: number;
+  name: string;
+  body_text: string;
+}
+
+export interface ReplyModalInput {
+  ticketId: number;
+  subject: string;
+  lastCustomerMessage: string;
+  macros: MacroOption[];
+  selectedMacroId?: number;
+}
+
+function expandMacroTemplate(body: string): string {
+  return body
+    .replace(/\{\{ticket\.customer\.first_name\}\}/g, "[Customer Name]")
+    .replace(/\{\{ticket\.assignee_user\.first_name\}\}/g, "[Your Name]")
+    .replace(/\{\{[^}]+\}\}/g, "[…]");
+}
+
+export function formatReplyModal(input: ReplyModalInput): object {
+  const { ticketId, subject, lastCustomerMessage, macros, selectedMacroId } = input;
+
+  const selectedMacro = macros.find((m) => m.id === selectedMacroId) ?? macros[0];
+  const replyText = selectedMacro ? expandMacroTemplate(selectedMacro.body_text) : "";
+
+  const subjectDisplay = subject.length > 44 ? `${subject.slice(0, 44)}…` : subject;
+  const messagePreview = lastCustomerMessage.length > 280
+    ? `${lastCustomerMessage.slice(0, 280)}…`
+    : lastCustomerMessage;
+
+  const blocks: object[] = [
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Ticket #${ticketId}*: ${subjectDisplay}` },
+    },
+    {
+      type: "section",
+      text: { type: "mrkdwn", text: `*Customer said:*\n>${messagePreview.replace(/\n/g, "\n>")}` },
+    },
+    { type: "divider" },
+  ];
+
+  // Macro selector
+  if (macros.length > 0) {
+    const options = macros.slice(0, 100).map((m) => ({
+      text: { type: "plain_text", text: m.name.length > 75 ? `${m.name.slice(0, 74)}…` : m.name },
+      value: String(m.id),
+    }));
+
+    const macroBlock: Record<string, unknown> = {
+      type: "section",
+      text: { type: "mrkdwn", text: "*Macro template:*" },
+      accessory: {
+        type: "static_select",
+        action_id: "select_macro",
+        placeholder: { type: "plain_text", text: "Choose a macro…" },
+        options,
+        ...(selectedMacro
+          ? {
+              initial_option: {
+                text: { type: "plain_text", text: selectedMacro.name.length > 75 ? `${selectedMacro.name.slice(0, 74)}…` : selectedMacro.name },
+                value: String(selectedMacro.id),
+              },
+            }
+          : {}),
+      },
+    };
+    blocks.push(macroBlock);
+  }
+
+  blocks.push({
+    type: "input",
+    block_id: "reply_input",
+    element: {
+      type: "plain_text_input",
+      action_id: "reply_text",
+      multiline: true,
+      initial_value: replyText,
+      placeholder: { type: "plain_text", text: "Type your reply…" },
+      min_length: 1,
+    },
+    label: { type: "plain_text", text: "Reply", emoji: true },
+  });
+
+  return {
+    type: "modal",
+    callback_id: "reply_modal",
+    private_metadata: JSON.stringify({ ticketId, selectedMacroId: selectedMacro?.id ?? null, macroName: selectedMacro?.name ?? null }),
+    title: { type: "plain_text", text: "Reply to Ticket", emoji: true },
+    submit: { type: "plain_text", text: "Send Reply", emoji: true },
+    close: { type: "plain_text", text: "Cancel", emoji: true },
+    blocks,
+  };
 }
 
 interface ApprovalData {
