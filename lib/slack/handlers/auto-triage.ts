@@ -1,14 +1,15 @@
 // Auto-triage handler — fires on every ticket-created webhook event.
 // Classifies the ticket, applies tags + assignment in Gorgias,
-// then posts a Slack card to #ops with the suggested template.
+// then posts a Slack card to #ops with a reply preview.
 
 import { classifyTicket } from "@/lib/langchain/tools/sw4-triage";
+import { TEMPLATES, fillTemplate } from "@/lib/langchain/tools/sw5-templates";
 import { updateTags, assignTicket, setStatus } from "@/lib/gorgias/client";
 import { sendSlackBlocks } from "@/lib/slack/client";
 import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
 
-// Best template to suggest per category (shown in Slack card)
-const TEMPLATE_HINT: Record<string, string | null> = {
+// Default template per category
+const CATEGORY_TEMPLATE: Record<string, string | null> = {
   track_order: "order_status_in_build",
   order_verification: "verification_what_needed",
   return_exchange: "return_process",
@@ -27,6 +28,8 @@ const PRIORITY_EMOJI: Record<string, string> = {
   low: "📋",
 };
 
+const NO_TEMPLATE_TEXT = "No template for this category — draft a custom response.";
+
 function parseTags(tagsField: unknown): string[] {
   if (!tagsField) return [];
   if (Array.isArray(tagsField)) return tagsField.map(String);
@@ -35,34 +38,40 @@ function parseTags(tagsField: unknown): string[] {
   return str.split(",").map((t) => t.replace(/[[\]']/g, "").trim()).filter(Boolean);
 }
 
+function previewBody(body: string, maxChars = 300): string {
+  const trimmed = body.trim();
+  if (trimmed.length <= maxChars) return trimmed;
+  // Cut at last sentence boundary within limit
+  const cut = trimmed.slice(0, maxChars);
+  const lastDot = Math.max(cut.lastIndexOf(". "), cut.lastIndexOf(".\n"));
+  return (lastDot > 100 ? cut.slice(0, lastDot + 1) : cut) + "…";
+}
+
 export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): Promise<void> {
   const ticketId = Number(payload.ticket_id) || 0;
   if (!ticketId) return;
 
   const subject = payload.subject ?? "(no subject)";
   const lastMessage = payload.last_message ?? "";
+  const customerName = payload.customer_name ?? "there";
   const existingTags = parseTags(payload.tags);
 
   const classification = await classifyTicket(subject, lastMessage);
 
-  // Spam → auto-close AND notify #ops so you can reopen if it's a false positive
+  // Spam → auto-close AND notify #ops so you can reopen false positives
   if (classification.category === "spam") {
     await setStatus(ticketId, "closed");
     console.log(`[auto-triage] Ticket #${ticketId} auto-closed as spam`);
     await sendSlackBlocks(
       `🗑️ Auto-closed spam ticket #${ticketId}`,
-      [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `🗑️ *Auto-closed as spam — Ticket #${ticketId}*\n${subject}\n_Reason: ${classification.reason}_\n\nIf this was a real customer, reopen it in Gorgias.`,
-          },
+      [{
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `🗑️ *Auto-closed as spam — Ticket #${ticketId}*\n${subject}\n_Reason: ${classification.reason}_\n\nIf this was a real customer, reopen it in Gorgias.`,
         },
-      ],
-      undefined,
-      undefined,
-      "ops",
+      }],
+      undefined, undefined, "ops",
     );
     return;
   }
@@ -84,21 +93,18 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
     actions.push(`Assigned → ${classification.suggestedAgent.split("@")[0]}`);
   }
 
+  // Build reply preview
+  const templateId = CATEGORY_TEMPLATE[classification.category];
+  const template = templateId ? TEMPLATES.find((t) => t.id === templateId) : null;
+  const replyPreview = template
+    ? previewBody(fillTemplate(template, customerName.split(" ")[0]).body)
+    : NO_TEMPLATE_TEXT;
+
   const emoji = PRIORITY_EMOJI[classification.suggestedPriority] ?? "🎫";
   const categoryDisplay = classification.category.replace(/_/g, " ");
-  const templateHint = TEMPLATE_HINT[classification.category];
   const assignedTo = classification.suggestedAgent
     ? classification.suggestedAgent.split("@")[0]
     : payload.assignee_email?.split("@")[0] ?? "—";
-
-  const fields = [
-    { type: "mrkdwn", text: `*Category:*\n${categoryDisplay}` },
-    { type: "mrkdwn", text: `*Priority:*\n${classification.suggestedPriority}` },
-    { type: "mrkdwn", text: `*Assigned:*\n${assignedTo}` },
-    ...(templateHint
-      ? [{ type: "mrkdwn", text: `*Suggested Template:*\n\`${templateHint}\`` }]
-      : []),
-  ];
 
   const blocks: object[] = [
     {
@@ -108,7 +114,22 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
         text: `${emoji} *New Ticket #${ticketId}*\n${subject}`,
       },
     },
-    { type: "section", fields },
+    {
+      type: "section",
+      fields: [
+        { type: "mrkdwn", text: `*Category:*\n${categoryDisplay}` },
+        { type: "mrkdwn", text: `*Priority:*\n${classification.suggestedPriority}` },
+        { type: "mrkdwn", text: `*Assigned:*\n${assignedTo}` },
+        { type: "mrkdwn", text: `*Template:*\n${templateId ? `\`${templateId}\`` : "none"}` },
+      ],
+    },
+    {
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*Suggested reply:*\n>${replyPreview.replace(/\n/g, "\n>")}`,
+      },
+    },
     ...(actions.length > 0
       ? [{
           type: "context",
@@ -120,8 +141,6 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
   await sendSlackBlocks(
     `${emoji} New ticket #${ticketId}: ${subject}`,
     blocks,
-    undefined,
-    undefined,
-    "ops",
+    undefined, undefined, "ops",
   );
 }

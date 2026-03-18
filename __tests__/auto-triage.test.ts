@@ -60,7 +60,7 @@ describe("handleAutoTriage", () => {
     expect(text).toContain("spam");
   });
 
-  it("classifies, tags, assigns, and posts Slack card for track_order", async () => {
+  it("classifies, tags, assigns, and posts Slack card with reply preview for track_order", async () => {
     mockClassify.mockResolvedValue({
       category: "track_order",
       suggestedTags: ["ORDER-STATUS"],
@@ -69,7 +69,7 @@ describe("handleAutoTriage", () => {
       reason: "Standard order status inquiry",
     });
 
-    await handleAutoTriage(makePayload());
+    await handleAutoTriage(makePayload({ customer_name: "John Smith" }));
 
     expect(mockTags).toHaveBeenCalledWith(99999, ["ORDER-STATUS"]);
     expect(mockAssign).toHaveBeenCalledWith(99999, "spencer@ironsidecomputers.com");
@@ -80,6 +80,9 @@ describe("handleAutoTriage", () => {
     expect(blockText).toContain("track order");
     expect(blockText).toContain("order_status_in_build");
     expect(blockText).toContain("spencer");
+    // Reply preview should include filled template body
+    expect(blockText).toContain("John");
+    expect(blockText).toContain("Suggested reply");
   });
 
   it("skips assignment if ticket already has an assignee", async () => {
@@ -97,7 +100,7 @@ describe("handleAutoTriage", () => {
     expect(mockSlack).toHaveBeenCalledTimes(1);
   });
 
-  it("posts Slack card without template hint for categories with no template", async () => {
+  it("shows custom response nudge for categories with no template", async () => {
     mockClassify.mockResolvedValue({
       category: "product_question",
       suggestedTags: [],
@@ -110,8 +113,8 @@ describe("handleAutoTriage", () => {
 
     const [, blocks] = mockSlack.mock.calls[0];
     const blockText = JSON.stringify(blocks);
-    expect(blockText).not.toContain("Suggested Template");
     expect(blockText).toContain("product question");
+    expect(blockText).toContain("draft a custom response");
   });
 
   it("skips tagging if all suggested tags already exist", async () => {
