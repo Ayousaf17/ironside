@@ -59,6 +59,20 @@ model PulseCheck {
   sessionId        String?  @map("session_id")
   createdAt        DateTime @default(now()) @map("created_at")
 
+  // Structured analytics fields for dashboard charting
+  dateRangeStart   DateTime? @map("date_range_start") @db.Date
+  dateRangeEnd     DateTime? @map("date_range_end") @db.Date
+  resolutionP50Min Float?    @map("resolution_p50_min")
+  resolutionP90Min Float?    @map("resolution_p90_min")
+  ticketsAnalyzed  Int?      @map("tickets_analyzed")
+  unassignedPct    Float?    @map("unassigned_pct")
+  channelEmail     Int?      @map("channel_email")
+  channelChat      Int?      @map("channel_chat")
+  workload         Json?
+  topQuestions     Json?     @map("top_questions")
+  tags             Json?
+  opsNotes         Json?     @map("ops_notes")
+
   @@map("pulse_checks")
 }
 

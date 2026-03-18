@@ -4,6 +4,8 @@ import { logCronError } from "@/lib/services/logging.service";
 import { createRouterAgent } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sendSlackMessage } from "@/lib/slack/client";
+import { getTickets } from "@/lib/gorgias/client";
+import { calculateAnalytics } from "@/lib/analytics/calculate";
 import { HumanMessage } from "@langchain/core/messages";
 
 export const maxDuration = 60;
@@ -46,8 +48,19 @@ Avg: X min • P50: Y min • P90: Z min (N tickets analyzed)
 
 const agent = createRouterAgent([sw3AnalyticsTool]);
 
+function extractOpsNotes(summary: string): string[] {
+  const lines = summary.split("\n");
+  const startIdx = lines.findIndex((l) => l.includes("Action Items"));
+  if (startIdx === -1) return [];
+  const notes: string[] = [];
+  for (let i = startIdx + 1; i < lines.length && notes.length < 6; i++) {
+    const match = lines[i].match(/^\d+\.\s*(.+)/);
+    if (match) notes.push(match[1].trim());
+  }
+  return notes;
+}
+
 export async function GET(request: Request) {
-  // Verify cron secret in production (Vercel sends this header)
   const authHeader = request.headers.get("authorization");
   if (
     process.env.CRON_SECRET &&
@@ -57,6 +70,21 @@ export async function GET(request: Request) {
   }
 
   try {
+    // 1. Fetch structured analytics directly — numbers come from code, not LLM
+    const tickets = await getTickets();
+    const analytics = calculateAnalytics(tickets);
+
+    const now = new Date();
+    const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+
+    const workloadMap = Object.fromEntries(
+      analytics.agentBreakdown.map((a) => [a.agent, a.ticketCount])
+    );
+    const tagsMap = Object.fromEntries(
+      analytics.topTags.map((t) => [t.tag, t.count])
+    );
+
+    // 2. Run LLM agent for Slack narrative + action items
     const result = await agent.invoke({
       messages: [new HumanMessage(PULSE_CHECK_PROMPT)],
     });
@@ -67,16 +95,36 @@ export async function GET(request: Request) {
         ? lastMessage.content
         : JSON.stringify(lastMessage.content);
 
-    // Send pulse check to Slack
+    const opsNotes = extractOpsNotes(summary);
+
+    // 3. Send to Slack
     await sendSlackMessage(summary);
 
-    // Log to pulse_checks table
+    // 4. Persist — structured fields + raw blob + LLM summary
     await createPulseCheck({
       channel: "cron",
       summary,
-      ticketCount: null,
-      insights: { source: "cron", prompt: "pulse-check-v2" },
       status: "completed",
+      ticketCount: analytics.totalTickets,
+      openTickets: analytics.openTickets,
+      closedTickets: analytics.closedTickets,
+      spamRate: analytics.spamRate,
+      avgResolutionMin: analytics.avgResolutionMinutes,
+      topCategory: analytics.topQuestions[0]?.question ?? null,
+      rawAnalytics: analytics as unknown as object,
+      insights: { source: "cron", prompt: "pulse-check-v2" },
+      dateRangeStart: thirtyDaysAgo,
+      dateRangeEnd: now,
+      resolutionP50Min: analytics.p50ResolutionMinutes,
+      resolutionP90Min: analytics.p90ResolutionMinutes,
+      ticketsAnalyzed: analytics.ticketsAnalyzed,
+      unassignedPct: analytics.unassignedRate,
+      channelEmail: analytics.ticketsByChannel["email"] ?? 0,
+      channelChat: analytics.ticketsByChannel["chat"] ?? 0,
+      workload: workloadMap,
+      topQuestions: analytics.topQuestions,
+      tags: tagsMap,
+      opsNotes,
     });
 
     return NextResponse.json({ ok: true, summary });
@@ -85,13 +133,11 @@ export async function GET(request: Request) {
       error instanceof Error ? error.message : "Unknown error";
     console.error("[cron/pulse-check] Error:", errorMessage);
 
-    // Log error to performance_metrics
     await logCronError({
       metric: "cron_pulse_check_error",
       error: errorMessage,
     });
 
-    // Send error notification to Slack
     await sendSlackMessage(`Pulse check cron failed: ${errorMessage}`);
 
     return NextResponse.json({ ok: false, error: errorMessage }, { status: 500 });
