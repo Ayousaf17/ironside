@@ -21,6 +21,10 @@ import {
   handleMacroSelect,
   handleReplySubmit,
 } from "@/lib/slack/handlers/reply-chain";
+import {
+  handleWrongCategoryFeedback,
+  handleCategoryCorrectionSubmit,
+} from "@/lib/slack/handlers/wrong-category";
 
 export const maxDuration = 30;
 
@@ -95,6 +99,13 @@ export async function POST(request: NextRequest) {
   if (payload.type === "view_submission" && payload.view?.callback_id === "reply_modal") {
     const userId = payload.user?.id ?? "unknown";
     after(() => handleReplySubmit({ viewPayload: payload.view, slackUserId: userId }));
+    return NextResponse.json({}); // empty body closes the modal
+  }
+
+  // ── Category correction modal submission ─────────────────────────────────
+  if (payload.type === "view_submission" && payload.view?.callback_id === "category_correction_modal") {
+    const userId = payload.user?.id ?? "unknown";
+    after(() => handleCategoryCorrectionSubmit({ viewPayload: payload.view, slackUserId: userId }));
     return NextResponse.json({}); // empty body closes the modal
   }
 
@@ -181,6 +192,28 @@ export async function POST(request: NextRequest) {
       await handleMacroSelect({ viewId, viewHash, selectedMacroId, ticketId });
     } catch (err) {
       console.error("[slack/interactivity] handleMacroSelect failed:", err);
+    }
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Wrong category feedback ──────────────────────────────────────────────
+  // Handled synchronously — trigger_id expires in ~3s
+  if (action.action_id === "wrong_category_feedback") {
+    const { ticketId, aiCategory, ticketSubject } = JSON.parse(action.value) as {
+      ticketId: number;
+      aiCategory: string;
+      ticketSubject: string;
+    };
+    try {
+      await handleWrongCategoryFeedback({
+        triggerId: payload.trigger_id,
+        ticketId,
+        aiCategory,
+        ticketSubject,
+        opsChannel: channel,
+      });
+    } catch (err) {
+      console.error("[slack/interactivity] handleWrongCategoryFeedback failed:", err);
     }
     return NextResponse.json({ ok: true });
   }

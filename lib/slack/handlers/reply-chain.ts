@@ -6,10 +6,20 @@
 
 import { getTicket, getMacros, replyPublic } from "@/lib/gorgias/client";
 import { formatReplyModal } from "@/lib/slack/formatters";
-import { slack } from "@/lib/slack/client";
+import { slack, sendSlackBlocks } from "@/lib/slack/client";
 import { createBehaviorLog } from "@/lib/repos/agent-behavior-log.repo";
 import { withRetry } from "@/lib/services/retry.service";
 import type { GorgiasMacro } from "@/lib/gorgias/mock";
+
+const TAG_TO_CATEGORY: Record<string, string> = {
+  "ORDER-STATUS":         "track_order",
+  "ORDER-VERIFICATION":   "order_verification",
+  "RETURN/EXCHANGE":      "return_exchange",
+  "REPORT-ISSUE":         "report_issue",
+  "PRODUCT":              "product_question",
+  "ORDER-CHANGE/CANCEL":  "order_change_cancel",
+  "CONTACT-FORM":         "contact_form",
+};
 
 // Maps Gorgias ticket tags to relevant macro tag keywords
 const TAG_TO_MACRO_TAGS: Record<string, string[]> = {
@@ -157,6 +167,27 @@ export async function handleReplySubmit({
       },
       occurredAt: new Date(),
     }).catch((err) => console.error(`[reply-chain] Log failed for #${ticketId}:`, err));
+
+    // Post-reply nudge: tell #ops a reply was sent + hint at similar open tickets
+    getTicket(ticketId)
+      .then((ticket) => {
+        if (!ticket) return;
+        let category: string | null = null;
+        for (const tag of ticket.tags ?? []) {
+          const cat = TAG_TO_CATEGORY[tag.toUpperCase()];
+          if (cat) { category = cat; break; }
+        }
+        const categoryDisplay = category ? category.replace(/_/g, " ") : null;
+        const nudgeText = categoryDisplay
+          ? `✅ <@${slackUserId}> replied to *#${ticketId}*. More *${categoryDisplay}* tickets in the queue? Use the pulse check triage buttons.`
+          : `✅ <@${slackUserId}> replied to *#${ticketId}*.`;
+        return sendSlackBlocks(
+          `✅ Reply sent to #${ticketId}`,
+          [{ type: "context", elements: [{ type: "mrkdwn", text: nudgeText }] }],
+          undefined, undefined, "ops",
+        );
+      })
+      .catch(() => {}); // nudge is best-effort
   } catch (err) {
     console.error(`[reply-chain] Failed to send reply for #${ticketId}:`, err);
   }

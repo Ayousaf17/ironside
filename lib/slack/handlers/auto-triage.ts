@@ -146,6 +146,19 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
           elements: [{ type: "mrkdwn", text: `_AI actions: ${actions.join(" · ")}_` }],
         }]
       : []),
+    {
+      type: "actions",
+      elements: [{
+        type: "button",
+        text: { type: "plain_text", text: "❌ Wrong category?" },
+        action_id: "wrong_category_feedback",
+        value: JSON.stringify({
+          ticketId,
+          aiCategory: classification.category,
+          ticketSubject: subject.slice(0, 100),
+        }),
+      }],
+    },
   ];
 
   await sendSlackBlocks(
