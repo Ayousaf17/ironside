@@ -39,6 +39,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install SWC binary for Linux
+        run: npm install --no-save @next/swc-linux-x64-gnu @next/swc-linux-x64-musl 2>/dev/null || true
+
       - name: Generate Prisma client
         run: npx prisma generate
 
