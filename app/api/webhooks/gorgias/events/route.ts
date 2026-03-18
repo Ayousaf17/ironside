@@ -16,6 +16,7 @@ import { enrichBehaviorEntry } from "@/lib/gorgias/enrich";
 import { logBehaviorEntries } from "@/lib/services/behavior.service";
 import { logApiCall, logApiError } from "@/lib/services/logging.service";
 import { handleNewTicketAlert } from "@/lib/slack/handlers/urgent-alert";
+import { notifyDeadLetter } from "@/lib/slack/handlers/dead-letter";
 import { isDuplicate, markSeen, webhookKey } from "@/lib/services/idempotency.service";
 import type { GorgiasHttpIntegrationPayload } from "@/lib/gorgias/events";
 
@@ -43,6 +44,8 @@ function verifyGorgiasSignature(_rawBody: string, request: Request): boolean {
 
 export async function POST(request: Request) {
   const startTime = Date.now();
+  let eventType = "unknown";
+  let ticketId: string | number = "unknown";
 
   try {
     const rawBody = await request.text();
@@ -55,8 +58,8 @@ export async function POST(request: Request) {
     const payload = JSON.parse(rawBody) as Record<string, unknown>;
 
     // Log the raw webhook for debugging
-    const eventType = String(payload.event_type ?? payload.type ?? "unknown");
-    const ticketId = payload.ticket_id ?? "unknown";
+    eventType = String(payload.event_type ?? payload.type ?? "unknown");
+    ticketId = payload.ticket_id ? String(payload.ticket_id) : "unknown";
     console.log(`[gorgias-webhook] Received event: ${eventType} for ticket ${ticketId}`);
 
     // Parse the event — auto-detects HTTP Integration vs native webhook format
@@ -135,6 +138,17 @@ export async function POST(request: Request) {
       });
     } catch {
       // Don't let logging failure mask the original error
+    }
+
+    // Dead letter: notify ops so no event silently disappears
+    // after() requires Next.js request context — fall back to fire-and-forget in test/non-Next envs
+    const dlNotify = notifyDeadLetter({ eventType, ticketId, error: message }).catch(
+      (e) => console.error("[gorgias-webhook] Dead letter notify failed:", e),
+    );
+    try {
+      after(dlNotify);
+    } catch {
+      void dlNotify;
     }
 
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
