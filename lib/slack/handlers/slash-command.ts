@@ -103,6 +103,12 @@ async function handleTicket(idArg: string | undefined): Promise<SlashResult> {
         { type: "mrkdwn", text: `*Assignee:*\n${ticket.assignee ?? "Unassigned"}` },
         { type: "mrkdwn", text: `*Messages:*\n${ticket.messages?.length ?? 0}` },
       ],
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "Reply →" },
+        action_id: "open_reply_modal",
+        value: JSON.stringify({ ticketId: id, tags: [], subject: ticket.subject.slice(0, 100) }),
+      },
     },
   ];
 

@@ -113,6 +113,12 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
         type: "mrkdwn",
         text: `${emoji} *New Ticket #${ticketId}*\n${subject}`,
       },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "Reply →" },
+        action_id: "open_reply_modal",
+        value: JSON.stringify({ ticketId, tags: [], subject: subject.slice(0, 100) }),
+      },
     },
     {
       type: "section",
@@ -122,6 +128,10 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
         { type: "mrkdwn", text: `*Assigned:*\n${assignedTo}` },
         { type: "mrkdwn", text: `*Template:*\n${templateId ? `\`${templateId}\`` : "none"}` },
       ],
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `_AI classified because: ${classification.reason}_` }],
     },
     {
       type: "section",
