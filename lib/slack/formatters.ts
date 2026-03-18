@@ -399,6 +399,115 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
   return blocks;
 }
 
+// ---- Spam Chain ----
+
+interface SpamTicket {
+  id: number;
+  subject: string;
+  tags: string[];
+  created_datetime: string;
+}
+
+export function formatSpamChainBlocks(
+  tickets: SpamTicket[],
+  reviewerSlackId: string
+): object[] {
+  const blocks: object[] = [];
+
+  // Header
+  blocks.push({
+    type: "header",
+    text: {
+      type: "plain_text",
+      text: `🗑️ Spam Queue — ${tickets.length} open ticket${tickets.length !== 1 ? "s" : ""}`,
+      emoji: true,
+    },
+  });
+
+  blocks.push({
+    type: "section",
+    text: {
+      type: "mrkdwn",
+      text: `Opened by <@${reviewerSlackId}> · Tagged \`non-support-related\` or \`auto-close\` · Last 24h window`,
+    },
+  });
+
+  blocks.push({ type: "divider" });
+
+  // Ticket list — up to 15 to stay under Slack's 50-block limit
+  const displayed = tickets.slice(0, 15);
+  for (const ticket of displayed) {
+    const ageMs = Date.now() - new Date(ticket.created_datetime).getTime();
+    const ageSecs = Math.floor(ageMs / 1000);
+    const ageStr =
+      ageSecs < 3600
+        ? `${Math.floor(ageSecs / 60)}m`
+        : ageSecs < 86400
+        ? `${Math.floor(ageSecs / 3600)}h`
+        : `${Math.floor(ageSecs / 86400)}d`;
+
+    const subject =
+      ticket.subject.length > 70
+        ? `${ticket.subject.slice(0, 70)}…`
+        : ticket.subject;
+
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*#${ticket.id}* — ${subject}\n_${ticket.tags.join(", ")} · ${ageStr} ago_`,
+      },
+    });
+  }
+
+  if (tickets.length > 15) {
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `_...and ${tickets.length - 15} more spam tickets_`,
+      },
+    });
+  }
+
+  blocks.push({ type: "divider" });
+
+  // Actions
+  blocks.push({
+    type: "actions",
+    elements: [
+      {
+        type: "button",
+        text: {
+          type: "plain_text",
+          text: `✅ Close All ${tickets.length} as Spam`,
+          emoji: true,
+        },
+        style: "danger",
+        action_id: "close_all_spam",
+        value: JSON.stringify({ count: tickets.length }),
+        confirm: {
+          title: { type: "plain_text", text: "Close all as spam?" },
+          text: {
+            type: "mrkdwn",
+            text: `This will close *${tickets.length} ticket${tickets.length !== 1 ? "s" : ""}* in Gorgias as spam. Are you sure?`,
+          },
+          confirm: { type: "plain_text", text: "Yes, close all" },
+          deny: { type: "plain_text", text: "Cancel" },
+        },
+      },
+      {
+        type: "button",
+        text: { type: "plain_text", text: "❌ Cancel", emoji: true },
+        action_id: "cancel_spam_review",
+        value: "{}",
+      },
+    ],
+  });
+
+  return blocks;
+}
+
 interface ApprovalData {
   ticketId: number;
   category: string;

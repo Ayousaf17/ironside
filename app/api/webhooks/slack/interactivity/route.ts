@@ -1,11 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { handleApproval } from "@/lib/services/approval.service";
 import { sendSlackMessage } from "@/lib/slack/client";
-import { setStatus, assignTicket, updateTags } from "@/lib/gorgias/client";
+import { setStatus, assignTicket } from "@/lib/gorgias/client";
 import { withRetry } from "@/lib/services/retry.service";
 import { logCronError } from "@/lib/services/logging.service";
 import { getAgentEmailByName } from "@/lib/services/agent-routing.service";
+import {
+  handleShowSpamTickets,
+  handleCloseAllSpam,
+  handleCancelSpamReview,
+} from "@/lib/slack/handlers/spam-chain";
 
 export const maxDuration = 30;
 
@@ -34,11 +39,6 @@ async function executeAction(
   action: string
 ): Promise<string> {
   switch (action) {
-    case "close_as_spam":
-      await withRetry(() => updateTags(ticketId, ["auto-close", "non-support-related"]));
-      await withRetry(() => setStatus(ticketId, "closed"));
-      return `Closed ticket #${ticketId} as spam`;
-
     case "close":
       await withRetry(() => setStatus(ticketId, "closed"));
       return `Closed ticket #${ticketId}`;
@@ -81,7 +81,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid payload" }, { status: 400 });
   }
 
-  // Only handle block_actions (button clicks)
   if (payload.type !== "block_actions") {
     return NextResponse.json({ ok: true });
   }
@@ -89,32 +88,42 @@ export async function POST(request: NextRequest) {
   const action = payload.actions?.[0];
   if (!action) return NextResponse.json({ ok: true });
 
-  const userId = payload.user?.id;
+  const userId = payload.user?.id ?? "unknown";
   const channel = payload.channel?.id;
   const messageTs = payload.message?.ts;
   const threadTs = payload.message?.thread_ts || messageTs;
+  const responseUrl: string = payload.response_url ?? "";
 
-  // Parse button value
-  let actionData: { ticketId: number; action: string };
-  try {
-    actionData = JSON.parse(action.value);
-  } catch {
-    return NextResponse.json({ error: "Invalid action value" }, { status: 400 });
-  }
+  // ── Spam chain ──────────────────────────────────────────────────────────
+  // Return 200 immediately (Slack 3s deadline), do work in background via after().
+  // response_url is called inside each handler to lock the message before any
+  // Gorgias work begins — this is the concurrency protection mechanism.
 
-  // Phase 1 placeholder handlers — pulse check action buttons
   if (action.action_id === "show_spam_tickets") {
-    await sendSlackMessage(
-      `🔄 Spam ticket review coming in next update. For now, check Gorgias directly.`,
-      channel,
-      threadTs
+    after(() =>
+      handleShowSpamTickets({ responseUrl, slackUserId: userId, channel })
     );
     return NextResponse.json({ ok: true });
   }
 
+  if (action.action_id === "close_all_spam") {
+    after(() =>
+      handleCloseAllSpam({ responseUrl, slackUserId: userId, channel })
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action.action_id === "cancel_spam_review") {
+    after(() =>
+      handleCancelSpamReview({ responseUrl, slackUserId: userId })
+    );
+    return NextResponse.json({ ok: true });
+  }
+
+  // ── Triage chain placeholders (Phase 3) ─────────────────────────────────
   if (action.action_id === "show_unassigned_tickets") {
     await sendSlackMessage(
-      `🔄 Triage flow coming in next update.`,
+      "🔄 Triage flow coming in the next update.",
       channel,
       threadTs
     );
@@ -123,11 +132,19 @@ export async function POST(request: NextRequest) {
 
   if (action.action_id === "show_urgent_tickets") {
     await sendSlackMessage(
-      `🔄 Urgent ticket review coming in next update.`,
+      "🔄 Urgent ticket review coming in the next update.",
       channel,
       threadTs
     );
     return NextResponse.json({ ok: true });
+  }
+
+  // ── Legacy approval flow (T1 agent recommendations) ─────────────────────
+  let actionData: { ticketId: number; action: string };
+  try {
+    actionData = JSON.parse(action.value);
+  } catch {
+    return NextResponse.json({ error: "Invalid action value" }, { status: 400 });
   }
 
   const approved = action.action_id === "approve_action";
@@ -161,7 +178,6 @@ export async function POST(request: NextRequest) {
       error: errorMessage,
     });
 
-    // Still try to notify the user
     try {
       await sendSlackMessage(
         `:warning: Error processing action: ${errorMessage}`,

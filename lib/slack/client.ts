@@ -34,6 +34,31 @@ export async function sendSlackMessage(
   });
 }
 
+/**
+ * Update a Slack message in-place via response_url (from interactivity payloads).
+ * Used to lock messages immediately when a button is clicked.
+ */
+export async function callResponseUrl(
+  responseUrl: string,
+  payload: {
+    text?: string;
+    blocks?: object[];
+    replace_original?: boolean;
+    delete_original?: boolean;
+    response_type?: "in_channel" | "ephemeral";
+  }
+): Promise<void> {
+  const body = { replace_original: true, ...payload };
+  const res = await fetch(responseUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    console.error("[callResponseUrl] Failed:", res.status, await res.text());
+  }
+}
+
 export async function sendSlackBlocks(
   text: string,
   blocks: unknown[],
