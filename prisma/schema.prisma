@@ -25,6 +25,7 @@ model ApiLog {
   tokenCount     Int?     @map("token_count")
   createdAt      DateTime @default(now()) @map("created_at")
 
+  @@index([createdAt])
   @@map("api_logs")
 }
 
@@ -39,6 +40,7 @@ model PerformanceMetric {
   endpoint  String?
   createdAt DateTime @default(now()) @map("created_at")
 
+  @@index([createdAt])
   @@map("performance_metrics")
 }
 
@@ -73,6 +75,7 @@ model PulseCheck {
   tags             Json?
   opsNotes         Json?     @map("ops_notes")
 
+  @@index([createdAt])
   @@map("pulse_checks")
 }
 

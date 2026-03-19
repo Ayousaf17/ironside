@@ -8,6 +8,11 @@ export const maxDuration = 30;
 // --- GET ---
 
 export async function GET(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   const section = request.nextUrl.searchParams.get("section") ?? "overview";
 
   try {
@@ -33,6 +38,11 @@ export async function GET(request: NextRequest) {
 // --- POST ---
 
 export async function POST(request: NextRequest) {
+  const authHeader = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   try {
     const body = await request.json() as {
       action: string;

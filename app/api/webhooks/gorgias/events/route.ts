@@ -25,10 +25,10 @@ export const maxDuration = 30;
 
 // Gorgias HTTP Integration does not support HMAC — we use a shared secret token instead.
 // Configure each HTTP Integration in Gorgias to send: X-Webhook-Secret: <GORGIAS_WEBHOOK_SECRET>
-// If GORGIAS_WEBHOOK_SECRET is not set, verification is skipped (allows gradual rollout).
+// If GORGIAS_WEBHOOK_SECRET is not set, reject the request (fail closed).
 function verifyGorgiasSignature(_rawBody: string, request: Request): boolean {
   const secret = process.env.GORGIAS_WEBHOOK_SECRET;
-  if (!secret) return true;
+  if (!secret) return false;
 
   const token = request.headers.get("x-webhook-secret");
   if (!token) return false;

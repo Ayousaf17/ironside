@@ -45,6 +45,7 @@ export default function SupportCommandCenter() {
   const [aiAnalytics, setAiAnalytics] = useState<AiAnalytics | null>(null);
   const [feedbackData, setFeedbackData] = useState<FeedbackLoopData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchAll = async () => {
@@ -73,6 +74,7 @@ export default function SupportCommandCenter() {
         if (feedbackJson.tab === 'feedback') setFeedbackData(feedbackJson);
       } catch (err) {
         console.error('Dashboard fetch error:', err);
+        setError('Failed to load dashboard data. Please refresh.');
       } finally {
         setLoading(false);
       }
@@ -93,6 +95,22 @@ export default function SupportCommandCenter() {
         <div className="text-center">
           <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600" />
           <p className="mt-4 text-gray-500 text-sm">Loading Command Center...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-red-600 font-medium">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700"
+          >
+            Retry
+          </button>
         </div>
       </div>
     );

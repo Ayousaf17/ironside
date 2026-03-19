@@ -116,6 +116,11 @@ async function runBackfill(after?: string, _before?: string, maxPages = 50): Pro
 
 // Manual trigger with optional date range
 export async function POST(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (process.env.GORGIAS_MOCK !== "false") {
     return NextResponse.json({
       ok: false,
@@ -145,7 +150,12 @@ export async function POST(request: Request) {
 }
 
 // Cron trigger — fetches last 24h of events
-export async function GET() {
+export async function GET(request: Request) {
+  const authHeader = request.headers.get("authorization");
+  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+
   if (process.env.GORGIAS_MOCK !== "false") {
     return NextResponse.json({
       status: "skipped",
