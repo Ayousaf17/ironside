@@ -332,11 +332,11 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
   // Workload
   if (analytics.agentBreakdown.length > 0) {
     const workloadLines = analytics.agentBreakdown
-      .map((a) => `• ${a.agent}: ${a.ticketCount} tickets (${a.closeRate}% close rate)`)
+      .map((a) => `• ${sanitizeMrkdwn(a.agent, 80)}: ${a.ticketCount} tickets (${a.closeRate}% close rate)`)
       .join("\n");
     blocks.push({
       type: "section",
-      text: { type: "mrkdwn", text: `*Workload:*\n${workloadLines}` },
+      text: { type: "mrkdwn", text: `*Workload:*\n${workloadLines}`.slice(0, 3000) },
     });
   }
 
