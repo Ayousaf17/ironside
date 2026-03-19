@@ -17,6 +17,7 @@ import AgentBehaviorTab, { type AgentBehaviorLog } from '@/components/dashboard/
 import AutomationControlTab from '@/components/dashboard/AutomationControlTab';
 import { type TierCategory } from '@/components/dashboard/TierReadinessTab';
 import AiPerformanceTab, { type AiAnalytics } from '@/components/dashboard/AiPerformanceTab';
+import FeedbackLoopTab, { type FeedbackLoopData } from '@/components/dashboard/FeedbackLoopTab';
 
 type TimePeriod = '7d' | '30d' | '90d' | 'all';
 
@@ -42,22 +43,25 @@ export default function SupportCommandCenter() {
   const [tierCategories, setTierCategories] = useState<TierCategory[]>([]);
   const [totalTicketsAnalyzed, setTotalTicketsAnalyzed] = useState(0);
   const [aiAnalytics, setAiAnalytics] = useState<AiAnalytics | null>(null);
+  const [feedbackData, setFeedbackData] = useState<FeedbackLoopData | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchAll = async () => {
       try {
-        const [pulseRes, behaviorRes, tiersRes, aiRes] = await Promise.all([
+        const [pulseRes, behaviorRes, tiersRes, aiRes, feedbackRes] = await Promise.all([
           fetch('/api/dashboard?tab=pulse'),
           fetch('/api/dashboard?tab=behavior'),
           fetch('/api/dashboard?tab=tiers'),
           fetch('/api/dashboard?tab=ai'),
+          fetch('/api/dashboard?tab=feedback'),
         ]);
-        const [pulseJson, behaviorJson, tiersJson, aiJson] = await Promise.all([
+        const [pulseJson, behaviorJson, tiersJson, aiJson, feedbackJson] = await Promise.all([
           pulseRes.json(),
           behaviorRes.json(),
           tiersRes.json(),
           aiRes.json(),
+          feedbackRes.json(),
         ]);
         if (pulseJson.data) setPulseData(pulseJson.data);
         if (behaviorJson.data) setBehaviorLogs(behaviorJson.data);
@@ -66,6 +70,7 @@ export default function SupportCommandCenter() {
           setTotalTicketsAnalyzed(tiersJson.totalTicketsAnalyzed ?? 0);
         }
         if (aiJson.today) setAiAnalytics(aiJson);
+        if (feedbackJson.tab === 'feedback') setFeedbackData(feedbackJson);
       } catch (err) {
         console.error('Dashboard fetch error:', err);
       } finally {
@@ -185,6 +190,11 @@ export default function SupportCommandCenter() {
             totalTicketsAnalyzed={totalTicketsAnalyzed}
             categories={tierCategories}
           />
+        )}
+
+        {/* FEEDBACK LOOP TAB */}
+        {activeTab === 'feedback-loop' && (
+          <FeedbackLoopTab data={feedbackData} />
         )}
 
         {/* DEEP DIVE TAB */}

@@ -33,6 +33,7 @@ interface AgentStats {
   ticketIds: Set<number>;
   touchSamples: number[];
   avgTouches: number | null;
+  categoryCount: Map<string, number>;
 }
 
 function avg(arr: number[]): number | null {
@@ -53,6 +54,9 @@ function eventLabel(type: string): { label: string; color: string } {
     case 'ticket-message-created': return { label: 'Reply', color: 'bg-blue-100 text-blue-700' };
     case 'ticket-assigned': return { label: 'Assigned', color: 'bg-purple-100 text-purple-700' };
     case 'ticket-closed': return { label: 'Closed', color: 'bg-green-100 text-green-700' };
+    case 'reply_ticket': return { label: 'Reply (Slack)', color: 'bg-blue-100 text-blue-700' };
+    case 'assign_ticket': return { label: 'Auto-assigned', color: 'bg-purple-100 text-purple-700' };
+    case 'category_correction': return { label: 'Correction', color: 'bg-amber-100 text-amber-700' };
     default: return { label: type, color: 'bg-gray-100 text-gray-600' };
   }
 }
@@ -62,7 +66,7 @@ function computeAgentStats(logs: AgentBehaviorLog[]): AgentStats[] {
 
   for (const row of logs) {
     if (!row.agent_name) continue;
-    if (row.event_type !== 'ticket-message-created') continue;
+    if (row.event_type !== 'ticket-message-created' && row.event_type !== 'reply_ticket') continue;
 
     if (!map.has(row.agent_name)) {
       map.set(row.agent_name, {
@@ -77,6 +81,7 @@ function computeAgentStats(logs: AgentBehaviorLog[]): AgentStats[] {
         ticketIds: new Set(),
         touchSamples: [],
         avgTouches: null,
+        categoryCount: new Map(),
       });
     }
 
@@ -88,6 +93,10 @@ function computeAgentStats(logs: AgentBehaviorLog[]): AgentStats[] {
       s.firstResponses++;
       // accumulate in avgFirstResponseMin temporarily as sum
       s.avgFirstResponseMin = (s.avgFirstResponseMin ?? 0) + row.time_to_first_response_min;
+    }
+
+    if (row.ticket_category) {
+      s.categoryCount.set(row.ticket_category, (s.categoryCount.get(row.ticket_category) ?? 0) + 1);
     }
 
     if (row.is_macro) s.macroUses++;
@@ -113,6 +122,11 @@ interface AgentBehaviorTabProps {
 export default function AgentBehaviorTab({ logs }: AgentBehaviorTabProps) {
   const replyLogs = logs.filter((l) => l.event_type === 'ticket-message-created');
   const agentStats = computeAgentStats(logs);
+
+  const slackReplies = logs.filter((l) => l.event_type === 'reply_ticket').length;
+  const gorgiasReplies = logs.filter((l) => l.event_type === 'ticket-message-created').length;
+  const totalAllReplies = slackReplies + gorgiasReplies;
+  const slackAdoptionPct = totalAllReplies > 0 ? Math.round((slackReplies / totalAllReplies) * 100) : 0;
 
   const totalReplies = replyLogs.length;
   const activeAgents = agentStats.length;
@@ -151,7 +165,7 @@ export default function AgentBehaviorTab({ logs }: AgentBehaviorTabProps) {
   return (
     <div className="space-y-8">
       {/* Hero stats */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Replies Logged" value={totalReplies.toString()} sub="agent messages captured" />
         <StatCard label="Active Agents" value={activeAgents.toString()} sub="handling tickets" />
         <StatCard label="Avg First Response" value={formatMin(avgFirst)} sub="from ticket open to reply" />
@@ -160,6 +174,12 @@ export default function AgentBehaviorTab({ logs }: AgentBehaviorTabProps) {
           value={`${macroRate}%`}
           sub={`${macroReplies} of ${totalReplies} replies used a macro`}
           highlight={macroRate > 50}
+        />
+        <StatCard
+          label="Slack Modal Replies"
+          value={`${slackAdoptionPct}%`}
+          sub={`${slackReplies} of ${totalAllReplies} replies via Slack`}
+          highlight={slackAdoptionPct > 30}
         />
       </div>
 
@@ -180,45 +200,58 @@ export default function AgentBehaviorTab({ logs }: AgentBehaviorTabProps) {
                 <th className="px-6 py-3 text-right font-medium">Macro Rate</th>
                 <th className="px-6 py-3 text-right font-medium">Avg Touches</th>
                 <th className="px-6 py-3 text-right font-medium">Avg CSAT</th>
+                <th className="px-6 py-3 text-left font-medium">Top Category</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {agentStats.map((agent) => (
-                <tr key={agent.name} className="hover:bg-gray-50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-xs">
-                        {agent.name.charAt(0).toUpperCase()}
+              {agentStats.map((agent) => {
+                const topCat = [...agent.categoryCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? null;
+                return (
+                  <tr key={agent.name} className="hover:bg-gray-50 transition-colors">
+                    <td className="px-6 py-4">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-7 h-7 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-xs">
+                          {agent.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="font-medium text-gray-900">{agent.name}</span>
                       </div>
-                      <span className="font-medium text-gray-900">{agent.name}</span>
-                    </div>
-                  </td>
-                  <td className="px-6 py-4 text-right font-medium text-gray-900">{agent.replies}</td>
-                  <td className="px-6 py-4 text-right text-gray-600">{agent.ticketIds.size}</td>
-                  <td className="px-6 py-4 text-right text-gray-600">{formatMin(agent.avgFirstResponseMin)}</td>
-                  <td className="px-6 py-4 text-right">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                      agent.macroRate > 60 ? 'bg-green-100 text-green-700' :
-                      agent.macroRate > 30 ? 'bg-yellow-100 text-yellow-700' :
-                      'bg-gray-100 text-gray-600'
-                    }`}>
-                      {agent.macroRate}%
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 text-right text-gray-600">
-                    {agent.avgTouches !== null ? agent.avgTouches.toFixed(1) : '—'}
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    {agent.avgCsat !== null ? (
-                      <span className={`font-medium ${agent.avgCsat >= 4 ? 'text-green-600' : agent.avgCsat >= 3 ? 'text-yellow-600' : 'text-red-500'}`}>
-                        {agent.avgCsat.toFixed(1)} / 5
+                    </td>
+                    <td className="px-6 py-4 text-right font-medium text-gray-900">{agent.replies}</td>
+                    <td className="px-6 py-4 text-right text-gray-600">{agent.ticketIds.size}</td>
+                    <td className="px-6 py-4 text-right text-gray-600">{formatMin(agent.avgFirstResponseMin)}</td>
+                    <td className="px-6 py-4 text-right">
+                      <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        agent.macroRate > 60 ? 'bg-green-100 text-green-700' :
+                        agent.macroRate > 30 ? 'bg-yellow-100 text-yellow-700' :
+                        'bg-gray-100 text-gray-600'
+                      }`}>
+                        {agent.macroRate}%
                       </span>
-                    ) : (
-                      <span className="text-gray-400">—</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td className="px-6 py-4 text-right text-gray-600">
+                      {agent.avgTouches !== null ? agent.avgTouches.toFixed(1) : '—'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      {agent.avgCsat !== null ? (
+                        <span className={`font-medium ${agent.avgCsat >= 4 ? 'text-green-600' : agent.avgCsat >= 3 ? 'text-yellow-600' : 'text-red-500'}`}>
+                          {agent.avgCsat.toFixed(1)} / 5
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-left">
+                      {topCat ? (
+                        <span className="inline-block rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600">
+                          {topCat.replace(/_/g, ' ')}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400">—</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

@@ -29,9 +29,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getPulseChecks());
       case "behavior":
         return NextResponse.json(await getBehaviorLogs());
+      case "feedback":
+        return NextResponse.json(await getFeedbackLoop());
       default:
         return NextResponse.json(
-          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior"] },
+          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback"] },
           { status: 400 }
         );
     }
@@ -277,5 +279,111 @@ async function getBehaviorLogs() {
       csat_score: b.csatScore,
       resolved_at: b.occurredAt?.toISOString() ?? null,
     })),
+  };
+}
+
+async function getFeedbackLoop() {
+  const [allJudged, recentCorrections, correctionLogs] = await Promise.all([
+    // All rows with a human judgement
+    prisma.ticketAnalytics.findMany({
+      where: { aiMatchesHuman: { not: null } },
+      select: { aiMatchesHuman: true, aiClassification: true, humanClassification: true, updatedAt: true, ticketId: true },
+      orderBy: { updatedAt: "desc" },
+    }),
+    // Recent mismatches
+    prisma.ticketAnalytics.findMany({
+      where: { aiMatchesHuman: false, humanClassification: { not: null }, aiClassification: { not: null } },
+      select: { ticketId: true, aiClassification: true, humanClassification: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+      take: 20,
+    }),
+    // category_correction behavior log entries (have slackUserId in rawEvent)
+    prisma.agentBehaviorLog.findMany({
+      where: { action: "category_correction" },
+      select: { agent: true, ticketId: true, occurredAt: true, rawEvent: true },
+      orderBy: { occurredAt: "desc" },
+      take: 20,
+    }),
+  ]);
+
+  const totalJudged = allJudged.length;
+  const totalCorrect = allJudged.filter((r) => r.aiMatchesHuman === true).length;
+  const totalCorrected = allJudged.filter((r) => r.aiMatchesHuman === false).length;
+  const overallAccuracy = totalJudged > 0 ? Math.round((totalCorrect / totalJudged) * 1000) / 10 : null;
+
+  // Misclassification matrix: aiCategory → humanCategory → count
+  const matrixMap = new Map<string, number>();
+  for (const row of allJudged) {
+    if (row.aiMatchesHuman === false && row.aiClassification && row.humanClassification) {
+      const key = `${row.aiClassification}→${row.humanClassification}`;
+      matrixMap.set(key, (matrixMap.get(key) ?? 0) + 1);
+    }
+  }
+  const matrix = Array.from(matrixMap.entries())
+    .map(([key, count]) => {
+      const [aiCategory, humanCategory] = key.split("→");
+      return { aiCategory, humanCategory, count };
+    })
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  // Weekly accuracy trend (last 8 weeks)
+  const weeklyMap = new Map<string, { correct: number; total: number }>();
+  for (const row of allJudged) {
+    const d = new Date(row.updatedAt);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    const monday = new Date(new Date(row.updatedAt).setDate(diff));
+    const weekKey = monday.toISOString().split("T")[0];
+    if (!weeklyMap.has(weekKey)) weeklyMap.set(weekKey, { correct: 0, total: 0 });
+    weeklyMap.get(weekKey)!.total++;
+    if (row.aiMatchesHuman) weeklyMap.get(weekKey)!.correct++;
+  }
+  const weeklyAccuracy = Array.from(weeklyMap.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .slice(-8)
+    .map(([week, { correct, total }]) => ({
+      week,
+      accuracy: total > 0 ? Math.round((correct / total) * 1000) / 10 : null,
+      total,
+      corrections: total - correct,
+    }));
+
+  // Classifier insights: pairs with >= 3 corrections are worth flagging
+  const classifierInsights = matrix
+    .filter((m) => m.count >= 3)
+    .map((m) => ({
+      aiCategory: m.aiCategory,
+      humanCategory: m.humanCategory,
+      count: m.count,
+      suggestion: `AI routes "${m.aiCategory.replace(/_/g, " ")}" tickets that should be "${m.humanCategory.replace(/_/g, " ")}" — ${m.count} corrections logged. Update the ${m.humanCategory.replace(/_/g, " ")} regex pattern.`,
+    }));
+
+  // Build a map from ticketId to correcting agent name (from behavior logs)
+  const correctorMap = new Map<number, string>();
+  for (const log of correctionLogs) {
+    if (!correctorMap.has(log.ticketId)) {
+      // agent field is "slack:USERID" format
+      const agentDisplay = log.agent.startsWith("slack:") ? `@${log.agent.slice(6)}` : log.agent;
+      correctorMap.set(log.ticketId, agentDisplay);
+    }
+  }
+
+  return {
+    tab: "feedback",
+    overallAccuracy,
+    totalJudged,
+    totalCorrect,
+    totalCorrected,
+    matrix,
+    recentCorrections: recentCorrections.map((r) => ({
+      ticketId: r.ticketId,
+      aiCategory: r.aiClassification!,
+      humanCategory: r.humanClassification!,
+      correctedAt: r.updatedAt.toISOString(),
+      correctedBy: correctorMap.get(r.ticketId) ?? null,
+    })),
+    weeklyAccuracy,
+    classifierInsights,
   };
 }
