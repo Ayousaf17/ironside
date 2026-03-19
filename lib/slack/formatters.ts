@@ -374,9 +374,10 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
       for (const q of topCats) {
         const emoji = QUESTION_EMOJI[q.question] ?? "📋";
         const category = QUESTION_TO_CATEGORY[q.question]!;
+        const btnLabel = `${emoji} ${q.question} (${q.count})`;
         buttons.push({
           type: "button",
-          text: { type: "plain_text", text: `${emoji} ${q.question} (${q.count})`, emoji: true },
+          text: { type: "plain_text", text: btnLabel.length > 75 ? `${btnLabel.slice(0, 72)}…` : btnLabel, emoji: true },
           action_id: "show_category_triage",
           value: JSON.stringify({ category, question: q.question, count: q.count }),
         });
