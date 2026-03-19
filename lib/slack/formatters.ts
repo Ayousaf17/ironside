@@ -388,7 +388,7 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
         buttons.push({
           type: "button",
           text: { type: "plain_text", text: btnLabel.length > 75 ? `${btnLabel.slice(0, 72)}…` : btnLabel, emoji: true },
-          action_id: "show_category_triage",
+          action_id: `show_category_triage_${category}`,
           value: JSON.stringify({ category, question: q.question, count: q.count }),
         });
       }

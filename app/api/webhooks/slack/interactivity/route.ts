@@ -219,7 +219,7 @@ export async function POST(request: NextRequest) {
   }
 
   // ── Category triage (from pulse check category buttons) ──────────────────
-  if (action.action_id === "show_category_triage") {
+  if (action.action_id.startsWith("show_category_triage")) {
     const { category } = JSON.parse(action.value) as { category: string; question: string; count: number };
     after(() =>
       handleShowUnassignedTickets({ responseUrl, slackUserId: userId, channel, categoryFilter: category })
