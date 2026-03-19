@@ -70,6 +70,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  let blocks: object[] = [];
+
   try {
     // 1. Fetch tickets updated in the last 24 hours — one pulse per day window
     const now = new Date();
@@ -98,7 +100,7 @@ export async function GET(request: Request) {
     const opsNotes = extractOpsNotes(summary);
 
     // 3. Send to Slack as Block Kit
-    const blocks = formatPulseCheckBlocks({
+    blocks = formatPulseCheckBlocks({
       summary,
       analytics: {
         ...analytics,
@@ -107,15 +109,6 @@ export async function GET(request: Request) {
       },
       dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
-    });
-    blocks.forEach((block, i) => {
-      const b = block as Record<string, unknown>;
-      const detail = b.text
-        ? JSON.stringify(b.text).slice(0, 200)
-        : b.fields
-        ? `fields[${(b.fields as unknown[]).length}]`
-        : String(b.type);
-      console.log(`[pulse-check] block[${i}] ${b.type}:`, detail);
     });
     await sendSlackBlocks("📊 Support Pulse Check", blocks, undefined, undefined, "ops");
 
@@ -150,9 +143,16 @@ export async function GET(request: Request) {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    // Log the full Slack API response (includes response_metadata.messages for invalid_blocks)
-    const errorData = (error as Record<string, unknown>)?.data;
-    console.error("[cron/pulse-check] Error:", errorMessage, errorData ? JSON.stringify(errorData) : "");
+    const slackData = (error as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+    const slackMsgs = (slackData?.response_metadata as Record<string, unknown> | undefined)?.messages;
+    // FIRST log line — MCP tool will show this for failed requests
+    console.error("[cron/pulse-check] SLACK_MSGS:", JSON.stringify(slackMsgs ?? errorMessage).slice(0, 400));
+    // Then dump each block so we can identify which one failed
+    blocks.forEach((b: object, i: number) => {
+      const block = b as Record<string, unknown>;
+      const detail = block.text ? JSON.stringify(block.text).slice(0, 150) : String(block.type);
+      console.error(`[cron/pulse-check] block[${i}] ${block.type}:`, detail);
+    });
 
     await logCronError({
       metric: "cron_pulse_check_error",
