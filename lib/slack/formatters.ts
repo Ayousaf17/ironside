@@ -255,6 +255,16 @@ export interface PulseCheckBlocksInput {
   dateRangeEnd: Date;
 }
 
+// Escape characters that break Slack mrkdwn validation when appearing in raw LLM output.
+// Slack interprets <text> as links/mentions — unescaped < > & in dynamic content fail validation.
+function sanitizeMrkdwn(text: string, maxLen = 3000): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .slice(0, maxLen);
+}
+
 export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
   const { summary, analytics, dateRangeStart, dateRangeEnd } = input;
 
@@ -311,11 +321,11 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
   if (analytics.topQuestions.length > 0) {
     const top3 = analytics.topQuestions.slice(0, 3);
     const questionLines = top3
-      .map((q, i) => `${i + 1}. "${q.question}" — ${q.count} tickets`)
+      .map((q, i) => `${i + 1}. "${sanitizeMrkdwn(q.question, 200)}" — ${q.count} tickets`)
       .join("\n");
     blocks.push({
       type: "section",
-      text: { type: "mrkdwn", text: `*Top Questions:*\n${questionLines}` },
+      text: { type: "mrkdwn", text: `*Top Questions:*\n${questionLines}`.slice(0, 3000) },
     });
   }
 
@@ -348,13 +358,13 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
   }
   if (actionItems.length > 0) {
     const actionLines = actionItems
-      .map((item, i) => `${i + 1}. ${item}`)
+      .map((item, i) => `${i + 1}. ${sanitizeMrkdwn(item, 500)}`)
       .join("\n");
     blocks.push({
       type: "section",
       text: {
         type: "mrkdwn",
-        text: `*:rotating_light: Action Items:*\n${actionLines}`,
+        text: `*:rotating_light: Action Items:*\n${actionLines}`.slice(0, 3000),
       },
     });
   }
