@@ -87,8 +87,10 @@ export async function GET(request: Request) {
     );
 
     // 2. Run LLM agent for Slack narrative + action items
+    //    Pass pre-computed analytics directly to avoid a second Gorgias API call
+    const analyticsContext = `Here is the analytics data (already computed — do NOT call any tools):\n\n${JSON.stringify(analytics, null, 2)}`;
     const result = await agent.invoke({
-      messages: [new HumanMessage(PULSE_CHECK_PROMPT)],
+      messages: [new HumanMessage(`${analyticsContext}\n\n${PULSE_CHECK_PROMPT}`)],
     });
 
     const lastMessage = result.messages[result.messages.length - 1];
