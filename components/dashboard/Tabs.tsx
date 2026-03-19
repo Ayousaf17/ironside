@@ -9,6 +9,7 @@ const tabs = [
   { id: 'operations', label: 'Operations' },
   { id: 'agent-behavior', label: 'Agent Behavior' },
   { id: 'automation-control', label: 'Automation Control' },
+  { id: 'feedback-loop', label: 'Feedback Loop' },
   { id: 'ai-performance', label: 'AI Performance' },
   { id: 'deep-dive', label: 'Deep Dive' },
 ];
