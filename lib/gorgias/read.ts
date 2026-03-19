@@ -99,7 +99,7 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
 }
 
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
-  const url = `${getBaseUrl()}/api/tickets?per_page=100&order_by=updated_datetime:desc`;
+  const url = `${getBaseUrl()}/api/tickets?limit=30`;
   console.log(`[gorgias] fetchTickets url=${url}`);
   const tickets = await fetchAllPages(url, getAuthHeaders());
   // Client-side date filter (Gorgias list API may not support date params)
