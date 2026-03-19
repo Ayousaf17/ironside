@@ -102,8 +102,7 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
     if (!pageRes || !pageRes.ok) {
       const body = pageRes ? await pageRes.text().catch(() => "") : "";
       const retryAfter = pageRes?.headers?.get("retry-after") ?? "n/a";
-      console.error(`[gorgias] API ${pageRes?.status} body=${body.slice(0, 300)} retry-after=${retryAfter}`);
-      throw new Error(`Gorgias API error: ${pageRes?.status} ${pageRes?.statusText}`);
+      throw new Error(`Gorgias API ${pageRes?.status}: ${body.slice(0, 200)} (retry-after: ${retryAfter})`);
     }
     const pageData = await pageRes.json() as { data: Record<string, unknown>[]; meta?: { next_cursor?: string } };
     all.push(...pageData.data.map((t) => normalizeTicket(t)));
