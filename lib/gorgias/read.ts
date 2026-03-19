@@ -101,10 +101,11 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
   const params = new URLSearchParams();
   if (options.updatedAfter) {
-    params.set("updated_datetime_after", options.updatedAfter.toISOString());
+    params.set("updated_datetime__gte", options.updatedAfter.toISOString());
   }
   const query = params.toString();
   const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
+  console.log(`[gorgias] fetchTickets url=${url}`);
   return fetchAllPages(url, getAuthHeaders());
 }
 
