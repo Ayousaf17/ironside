@@ -11,7 +11,10 @@ import { fetchTickets, fetchTicket, searchTickets as fetchSearchTickets, fetchMa
 import * as write from "./write";
 
 function isMockMode(): boolean {
-  return process.env.GORGIAS_MOCK !== "false";
+  const val = process.env.GORGIAS_MOCK;
+  const mock = val !== "false";
+  console.log(`[gorgias] GORGIAS_MOCK="${val}" → mock=${mock}`);
+  return mock;
 }
 
 export async function getTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
