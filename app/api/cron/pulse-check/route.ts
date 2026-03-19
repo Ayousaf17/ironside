@@ -108,7 +108,8 @@ export async function GET(request: Request) {
       dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
     });
-    await sendSlackBlocks(summary, blocks, undefined, undefined, "ops");
+    console.log("[pulse-check] blocks:", JSON.stringify(blocks));
+    await sendSlackBlocks("📊 Support Pulse Check", blocks, undefined, undefined, "ops");
 
     // 4. Persist — structured fields + raw blob + LLM summary
     await createPulseCheck({
@@ -141,7 +142,9 @@ export async function GET(request: Request) {
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    console.error("[cron/pulse-check] Error:", errorMessage);
+    // Log the full Slack API response (includes response_metadata.messages for invalid_blocks)
+    const errorData = (error as Record<string, unknown>)?.data;
+    console.error("[cron/pulse-check] Error:", errorMessage, errorData ? JSON.stringify(errorData) : "");
 
     await logCronError({
       metric: "cron_pulse_check_error",
