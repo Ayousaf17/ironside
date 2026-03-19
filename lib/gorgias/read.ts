@@ -88,8 +88,18 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
       break;
     }
 
-    const pageRes = await fetch(fetchUrl, { headers });
-    if (!pageRes.ok) throw new Error(`Gorgias API error: ${pageRes.status} ${pageRes.statusText}`);
+    let pageRes: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      pageRes = await fetch(fetchUrl, { headers });
+      if (pageRes.status === 429) {
+        const wait = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        console.log(`[gorgias] 429 rate limited, retrying in ${wait}ms (attempt ${attempt + 1}/3)`);
+        await new Promise((r) => setTimeout(r, wait));
+        continue;
+      }
+      break;
+    }
+    if (!pageRes || !pageRes.ok) throw new Error(`Gorgias API error: ${pageRes?.status} ${pageRes?.statusText}`);
     const pageData = await pageRes.json() as { data: Record<string, unknown>[]; meta?: { next_cursor?: string } };
     all.push(...pageData.data.map((t) => normalizeTicket(t)));
     cursor = pageData.meta?.next_cursor ?? null;
