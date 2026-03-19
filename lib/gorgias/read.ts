@@ -99,14 +99,15 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
 }
 
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
-  const params = new URLSearchParams();
-  if (options.updatedAfter) {
-    params.set("updated_datetime__gte", options.updatedAfter.toISOString());
-  }
-  const query = params.toString();
-  const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
+  const url = `${getBaseUrl()}/api/tickets?per_page=100&order_by=updated_datetime:desc`;
   console.log(`[gorgias] fetchTickets url=${url}`);
-  return fetchAllPages(url, getAuthHeaders());
+  const tickets = await fetchAllPages(url, getAuthHeaders());
+  // Client-side date filter (Gorgias list API may not support date params)
+  if (options.updatedAfter) {
+    const cutoff = options.updatedAfter.getTime();
+    return tickets.filter((t) => new Date(t.created_datetime).getTime() >= cutoff);
+  }
+  return tickets;
 }
 
 export async function fetchTicket(id: number): Promise<GorgiasTicket | undefined> {
