@@ -108,7 +108,15 @@ export async function GET(request: Request) {
       dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
     });
-    console.log("[pulse-check] blocks:", JSON.stringify(blocks));
+    blocks.forEach((block, i) => {
+      const b = block as Record<string, unknown>;
+      const detail = b.text
+        ? JSON.stringify(b.text).slice(0, 200)
+        : b.fields
+        ? `fields[${(b.fields as unknown[]).length}]`
+        : String(b.type);
+      console.log(`[pulse-check] block[${i}] ${b.type}:`, detail);
+    });
     await sendSlackBlocks("📊 Support Pulse Check", blocks, undefined, undefined, "ops");
 
     // 4. Persist — structured fields + raw blob + LLM summary
