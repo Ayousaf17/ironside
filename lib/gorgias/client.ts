@@ -11,9 +11,9 @@ import { fetchTickets, fetchTicket, searchTickets as fetchSearchTickets, fetchMa
 import * as write from "./write";
 
 function isMockMode(): boolean {
-  const val = process.env.GORGIAS_MOCK;
+  const val = (process.env.GORGIAS_MOCK ?? "").trim().toLowerCase();
   const mock = val !== "false";
-  console.log(`[gorgias] GORGIAS_MOCK="${val}" → mock=${mock}`);
+  console.log(`[gorgias] GORGIAS_MOCK raw="${process.env.GORGIAS_MOCK}" normalized="${val}" mock=${mock}`);
   return mock;
 }
 
