@@ -99,7 +99,7 @@ export async function GET(request: Request) {
 
     const opsNotes = extractOpsNotes(summary);
 
-    // 3. Send to Slack as Block Kit
+    // 3. Send to Slack as Block Kit (with fallback to plain text)
     blocks = formatPulseCheckBlocks({
       summary,
       analytics: {
@@ -110,7 +110,29 @@ export async function GET(request: Request) {
       dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
     });
-    await sendSlackBlocks("📊 Support Pulse Check", blocks, undefined, undefined, "ops");
+
+    let slackBlocksError: string | null = null;
+    try {
+      await sendSlackBlocks("📊 Support Pulse Check", blocks, undefined, undefined, "ops");
+    } catch (slackErr) {
+      // Extract the Slack validation detail so we can finally see what's wrong
+      const sd = (slackErr as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
+      const msgs = (sd?.response_metadata as Record<string, unknown> | undefined)?.messages;
+      slackBlocksError = JSON.stringify(msgs ?? (slackErr instanceof Error ? slackErr.message : slackErr)).slice(0, 500);
+      console.error("[pulse-check] BLOCKS_FAILED:", slackBlocksError);
+      // Dump each block for debugging
+      blocks.forEach((b: object, i: number) => {
+        const blk = b as Record<string, unknown>;
+        console.error(`[pulse-check] block[${i}]:`, JSON.stringify(blk).slice(0, 300));
+      });
+      // Fallback: send the LLM summary as plain text so the team still gets the pulse check
+      await sendSlackMessage(
+        `📊 Pulse Check (blocks failed — detail below)\n\n${summary.slice(0, 2800)}\n\n⚠️ Block error: ${slackBlocksError}`,
+        undefined,
+        undefined,
+        "ops",
+      );
+    }
 
     // 4. Persist — structured fields + raw blob + LLM summary
     await createPulseCheck({
@@ -139,20 +161,11 @@ export async function GET(request: Request) {
       opsNotes,
     });
 
-    return NextResponse.json({ ok: true, summary });
+    return NextResponse.json({ ok: true, summary, slackBlocksError });
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";
-    const slackData = (error as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
-    const slackMsgs = (slackData?.response_metadata as Record<string, unknown> | undefined)?.messages;
-    // FIRST log line — MCP tool will show this for failed requests
-    console.error("[cron/pulse-check] SLACK_MSGS:", JSON.stringify(slackMsgs ?? errorMessage).slice(0, 400));
-    // Then dump each block so we can identify which one failed
-    blocks.forEach((b: object, i: number) => {
-      const block = b as Record<string, unknown>;
-      const detail = block.text ? JSON.stringify(block.text).slice(0, 150) : String(block.type);
-      console.error(`[cron/pulse-check] block[${i}] ${block.type}:`, detail);
-    });
+    console.error("[cron/pulse-check] Error:", errorMessage);
 
     await logCronError({
       metric: "cron_pulse_check_error",
