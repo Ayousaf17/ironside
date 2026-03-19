@@ -310,7 +310,7 @@ export async function POST(request: NextRequest) {
         });
 
         await sendSlackMessage(
-          `Error processing message: ${errorMessage}`,
+          "Sorry, I encountered an error processing your request. Please try again.",
           channel,
           threadTs
         );

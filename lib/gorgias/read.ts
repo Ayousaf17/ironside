@@ -2,6 +2,48 @@
 
 import type { GorgiasTicket, GorgiasMacro } from "./mock";
 
+/**
+ * Normalizes a raw Gorgias API ticket response to match the GorgiasTicket interface.
+ *
+ * The real Gorgias REST API returns:
+ *   - tags as { id: number, name: string }[] instead of string[]
+ *   - assignee_user as { id, email, name? } | null instead of assignee: string | null
+ *
+ * This function handles both raw API shapes and already-normalized data.
+ */
+function normalizeTicket(raw: Record<string, unknown>): GorgiasTicket {
+  // Normalize tags: could be string[] or { id, name }[]
+  const rawTags = (raw.tags ?? []) as unknown[];
+  const tags = rawTags
+    .map((t) =>
+      typeof t === "string"
+        ? t
+        : ((t as Record<string, unknown>)?.name as string) ?? ""
+    )
+    .filter(Boolean);
+
+  // Normalize assignee: could be string, object with email, or null
+  const rawAssignee = raw.assignee_user ?? raw.assignee;
+  let assignee: string | null = null;
+  if (typeof rawAssignee === "string") {
+    assignee = rawAssignee;
+  } else if (rawAssignee && typeof rawAssignee === "object") {
+    assignee =
+      ((rawAssignee as Record<string, unknown>).email as string) ?? null;
+  }
+
+  return {
+    id: raw.id as number,
+    subject: (raw.subject as string) ?? "",
+    status: (raw.status as "open" | "closed") ?? "open",
+    channel: (raw.channel as "email" | "chat") ?? "email",
+    assignee,
+    tags,
+    created_datetime: (raw.created_datetime as string) ?? "",
+    messages: (raw.messages ?? []) as GorgiasTicket["messages"],
+  };
+}
+
 export interface TicketSearchFilters {
   limit?: number;
   order_by?: string;
@@ -48,8 +90,8 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
 
     const pageRes = await fetch(fetchUrl, { headers });
     if (!pageRes.ok) throw new Error(`Gorgias API error: ${pageRes.status} ${pageRes.statusText}`);
-    const pageData = await pageRes.json() as { data: GorgiasTicket[]; meta?: { next_cursor?: string } };
-    all.push(...pageData.data);
+    const pageData = await pageRes.json() as { data: Record<string, unknown>[]; meta?: { next_cursor?: string } };
+    all.push(...pageData.data.map((t) => normalizeTicket(t)));
     cursor = pageData.meta?.next_cursor ?? null;
     if (!cursor) break;
   }
@@ -70,7 +112,8 @@ export async function fetchTicket(id: number): Promise<GorgiasTicket | undefined
   const res = await fetch(`${getBaseUrl()}/api/tickets/${id}`, { headers: getAuthHeaders() });
   if (res.status === 404) return undefined;
   if (!res.ok) throw new Error(`Gorgias API error: ${res.status} ${res.statusText}`);
-  return (await res.json()) as GorgiasTicket;
+  const raw = (await res.json()) as Record<string, unknown>;
+  return normalizeTicket(raw);
 }
 
 export async function searchTickets(filters: TicketSearchFilters = {}): Promise<GorgiasTicket[]> {
