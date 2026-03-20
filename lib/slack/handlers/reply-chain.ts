@@ -9,6 +9,7 @@ import { formatReplyModal } from "@/lib/slack/formatters";
 import { slack, sendSlackBlocks } from "@/lib/slack/client";
 import { createBehaviorLog } from "@/lib/repos/agent-behavior-log.repo";
 import { withRetry } from "@/lib/services/retry.service";
+import { getDraft, clearDraft, saveDraft } from "@/lib/services/draft.service";
 import type { GorgiasMacro } from "@/lib/gorgias/mock";
 
 const TAG_TO_CATEGORY: Record<string, string> = {
@@ -63,7 +64,11 @@ export async function handleOpenReplyModal({
   ticketId: number;
   tags: string[];
 }): Promise<void> {
-  const [ticket, allMacros] = await Promise.all([getTicket(ticketId), getMacros()]);
+  const [ticket, allMacros, draftText] = await Promise.all([
+    getTicket(ticketId),
+    getMacros(),
+    getDraft(ticketId),
+  ]);
 
   if (!ticket) {
     console.error(`[reply-chain] Ticket #${ticketId} not found`);
@@ -82,6 +87,7 @@ export async function handleOpenReplyModal({
     lastCustomerMessage,
     macros,
     selectedMacroId: macros[0]?.id,
+    draftText,
   });
 
   await slack.views.open({
@@ -126,6 +132,24 @@ export async function handleMacroSelect({
   });
 }
 
+// Saves reply text as a draft when the modal is closed without submitting.
+export async function handleReplyModalClose({
+  viewPayload,
+}: {
+  viewPayload: {
+    private_metadata: string;
+    state: { values: Record<string, Record<string, { value?: string | null }>> };
+  };
+}): Promise<void> {
+  const { ticketId } = JSON.parse(viewPayload.private_metadata) as { ticketId: number };
+  const replyText = viewPayload.state.values.reply_input?.reply_text?.value ?? "";
+
+  if (replyText.trim()) {
+    await saveDraft(ticketId, replyText);
+    console.log(`[reply-chain] Draft saved for ticket #${ticketId}`);
+  }
+}
+
 // Sends the reply to Gorgias after the agent submits the modal.
 // Called via after() — modal is already closed before this runs.
 export async function handleReplySubmit({
@@ -149,6 +173,9 @@ export async function handleReplySubmit({
 
   try {
     await withRetry(() => replyPublic(ticketId, replyText));
+
+    // Clear saved draft on successful send
+    clearDraft(ticketId).catch(() => {});
 
     createBehaviorLog({
       agent: `slack:${slackUserId}`,

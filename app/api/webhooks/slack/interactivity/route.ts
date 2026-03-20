@@ -20,6 +20,7 @@ import {
   handleOpenReplyModal,
   handleMacroSelect,
   handleReplySubmit,
+  handleReplyModalClose,
 } from "@/lib/slack/handlers/reply-chain";
 import {
   handleWrongCategoryFeedback,
@@ -107,6 +108,12 @@ export async function POST(request: NextRequest) {
     const userId = payload.user?.id ?? "unknown";
     after(() => handleCategoryCorrectionSubmit({ viewPayload: payload.view, slackUserId: userId }));
     return NextResponse.json({}); // empty body closes the modal
+  }
+
+  // ── Reply modal closed without submitting — save draft ──────────────────
+  if (payload.type === "view_closed" && payload.view?.callback_id === "reply_modal") {
+    after(() => handleReplyModalClose({ viewPayload: payload.view }));
+    return NextResponse.json({ ok: true });
   }
 
   if (payload.type !== "block_actions") {
