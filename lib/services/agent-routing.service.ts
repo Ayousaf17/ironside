@@ -90,3 +90,29 @@ export async function getAgentEmailByName(name: "spencer" | "danni"): Promise<st
   const entry = Object.values(routing).find((email) => email.toLowerCase().includes(name));
   return entry ?? (name === "spencer" ? "spencer@ironsidecomputers.com" : "danni-jean@ironsidecomputers.com");
 }
+
+// Agent tier definitions for escalation
+const AGENT_TIERS: Record<string, "junior" | "senior"> = {
+  "spencer@ironsidecomputers.com": "senior",
+  "danni-jean@ironsidecomputers.com": "senior",
+  "mackenzie@ironsidecomputers.com": "junior",
+  "gabe@ironsidecomputers.com": "junior",
+};
+
+// Escalation thresholds: if a junior agent's ticket exceeds these, escalate
+export const ESCALATION_THRESHOLDS = {
+  ageHoursNoResponse: 2,  // Junior ticket with no response after 2h
+  ageHoursOpen: 8,        // Junior ticket still open after 8h
+};
+
+export function getAgentTier(email: string): "junior" | "senior" | "unknown" {
+  return AGENT_TIERS[email.toLowerCase()] ?? "unknown";
+}
+
+export function getSeniorAgentFor(category: string): string {
+  // Prefer Spencer for technical, Danni for verification/returns
+  const techCategories = ["report_issue", "product_question", "track_order"];
+  return techCategories.includes(category)
+    ? "spencer@ironsidecomputers.com"
+    : "danni-jean@ironsidecomputers.com";
+}

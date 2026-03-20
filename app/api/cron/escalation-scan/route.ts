@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { searchTickets } from "@/lib/gorgias/client";
+import { searchTickets, assignTicket } from "@/lib/gorgias/client";
 import { sendSlackMessage } from "@/lib/slack/client";
 import { formatEscalationAlert } from "@/lib/slack/formatters";
 import { withRetry } from "@/lib/services/retry.service";
 import { logCronError } from "@/lib/services/logging.service";
+import { getAgentTier, getSeniorAgentFor, ESCALATION_THRESHOLDS } from "@/lib/services/agent-routing.service";
 
 export const maxDuration = 30;
 
@@ -84,6 +85,38 @@ export async function GET(request: Request) {
             ? `Ping ${ticket.assignee.split("@")[0]} for response`
             : "Assign and respond immediately",
         });
+      }
+
+      // Junior→Senior escalation
+      if (ticket.assignee && getAgentTier(ticket.assignee) === "junior") {
+        const needsEscalation =
+          (!hasResponse && ageHours >= ESCALATION_THRESHOLDS.ageHoursNoResponse) ||
+          (ageHours >= ESCALATION_THRESHOLDS.ageHoursOpen);
+
+        if (needsEscalation) {
+          const category = ticket.tags
+            .map((t) => t.toLowerCase().replace(/-/g, "_"))
+            .find((t) => ["track_order", "report_issue", "return_exchange", "order_verification", "product_question"].includes(t))
+            ?? "other";
+          const seniorAgent = getSeniorAgentFor(category);
+          const juniorName = ticket.assignee.split("@")[0];
+
+          // Reassign to senior
+          try {
+            await assignTicket(ticket.id, seniorAgent);
+          } catch { /* log but don't block escalation alert */ }
+
+          escalations.push({
+            ticket_id: ticket.id,
+            subject: ticket.subject,
+            severity: "high",
+            reason: `Escalated from ${juniorName} (junior) — ${ageHours}h old${!hasResponse ? ", no response" : ""}`,
+            assignee: seniorAgent,
+            age_hours: ageHours,
+            customer_name: customerName,
+            action: `Reassigned to ${seniorAgent.split("@")[0]} (senior)`,
+          });
+        }
       }
     }
 

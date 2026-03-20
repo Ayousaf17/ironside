@@ -40,6 +40,6 @@ All tabs confirmed live with real data. Reporting view added.
 2. ~~Customer sentiment tracking~~ — **DONE** (angry/frustrated/happy/neutral detected via regex, shown on triage cards)
 3. ~~`/ironside search <keyword>` slash command~~ — **DONE** (searches tickets by subject/tags, shows up to 10 results with Reply buttons)
 4. Reply draft auto-save — **PENDING** (needs modal state persistence)
-5. Junior→Senior escalation flow — **PENDING** (needs escalation rules config)
-6. Offline queue for Gorgias downtime — **PENDING** (needs queue infrastructure)
+5. ~~Junior→Senior escalation flow~~ — **DONE** (junior agent tickets auto-escalate to senior after 2h no-response or 8h open)
+6. ~~Offline queue for Gorgias downtime~~ — **DONE** (failed write ops queued in DB for retry)
 7. ~~Cost accountability dashboard~~ — **DONE** (AI Performance tab already tracks per-request costs, daily/monthly rollups)
