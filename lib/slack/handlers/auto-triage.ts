@@ -146,7 +146,13 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
     },
     {
       type: "context",
-      elements: [{ type: "mrkdwn", text: `_AI classified because: ${classification.reason}_` }],
+      elements: [
+        { type: "mrkdwn", text: `_AI classified because: ${classification.reason}_` },
+        ...(classification.sentiment !== "neutral" ? [{
+          type: "mrkdwn",
+          text: `_Sentiment: ${classification.sentiment === "angry" ? "🔴 Angry" : classification.sentiment === "frustrated" ? "🟡 Frustrated" : "🟢 Happy"}_`,
+        }] : []),
+      ],
     },
     {
       type: "section",

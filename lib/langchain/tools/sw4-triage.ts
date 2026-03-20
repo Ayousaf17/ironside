@@ -28,16 +28,31 @@ const SPAM_PATTERNS = [
 ];
 
 // Category detection from subject + message content
+export type CustomerSentiment = "frustrated" | "angry" | "neutral" | "happy";
+
 export interface TicketClassification {
   category: "track_order" | "order_verification" | "product_question" | "report_issue" | "return_exchange" | "order_change_cancel" | "contact_form" | "spam" | "other";
   suggestedTags: string[];
   suggestedPriority: "critical" | "high" | "normal" | "low";
   suggestedAgent: string | null;
   reason: string;
+  sentiment: CustomerSentiment;
+}
+
+const ANGRY_PATTERNS = /\b(scam|fraud|sue|lawyer|bbb|attorney|legal\s*action|report\s*you|worst\s*company|rip\s*off|stolen|theft|never\s*buy|disgusting)\b/i;
+const FRUSTRATED_PATTERNS = /\b(ridiculous|unacceptable|disappointing|frustrated|annoyed|fed\s*up|waited\s*(too\s*long|forever)|still\s*waiting|no\s*response|ignored|useless|terrible|awful|horrible|wtf|what\s*the\s*hell)\b/i;
+const HAPPY_PATTERNS = /\b(thank\s*you|thanks|great\s*job|awesome|excellent|amazing|love\s*(my|the|this)|perfect|impressed|happy|satisfied|recommend|fantastic)\b/i;
+
+export function detectSentiment(text: string): CustomerSentiment {
+  if (ANGRY_PATTERNS.test(text)) return "angry";
+  if (FRUSTRATED_PATTERNS.test(text)) return "frustrated";
+  if (HAPPY_PATTERNS.test(text)) return "happy";
+  return "neutral";
 }
 
 export async function classifyTicket(subject: string, messageText: string): Promise<TicketClassification> {
   const combined = `${subject} ${messageText}`.toLowerCase();
+  const sentiment = detectSentiment(`${subject} ${messageText}`);
 
   // Check spam first
   for (const pattern of SPAM_PATTERNS) {
@@ -48,6 +63,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
         suggestedPriority: "low",
         suggestedAgent: null,
         reason: `Matched spam pattern: ${pattern.source}`,
+        sentiment: "neutral",
       };
     }
   }
@@ -60,6 +76,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "critical",
       suggestedAgent: await getAgentEmailForCategory("report_issue"),
       reason: "Water cooling issue detected — potential hardware damage",
+      sentiment,
     };
   }
 
@@ -71,6 +88,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "critical",
       suggestedAgent: await getAgentEmailForCategory("report_issue"),
       reason: "DOA / no power issue — critical hardware failure",
+      sentiment,
     };
   }
 
@@ -84,6 +102,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: isOverdue ? "high" : "normal",
       suggestedAgent: await getAgentEmailForCategory("track_order"),
       reason: isOverdue ? "Order status inquiry — customer indicates overdue" : "Standard order status inquiry",
+      sentiment,
     };
   }
 
@@ -96,6 +115,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: isStuck ? "high" : "normal",
       suggestedAgent: await getAgentEmailForCategory("order_verification"),
       reason: isStuck ? "Verification stuck — customer already submitted docs" : "Standard verification inquiry",
+      sentiment,
     };
   }
 
@@ -107,6 +127,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "normal",
       suggestedAgent: await getAgentEmailForCategory("return_exchange"),
       reason: "Return or exchange request",
+      sentiment,
     };
   }
 
@@ -118,6 +139,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "normal",
       suggestedAgent: await getAgentEmailForCategory("order_change_cancel"),
       reason: "Order change or cancellation request",
+      sentiment,
     };
   }
 
@@ -130,6 +152,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "high",
       suggestedAgent: await getAgentEmailForCategory("report_issue"),
       reason: isDriverIssue ? "Driver/connectivity issue — common post-delivery problem" : "Hardware or software issue reported",
+      sentiment,
     };
   }
 
@@ -141,6 +164,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "normal",
       suggestedAgent: await getAgentEmailForCategory("product_question"),
       reason: "Pre-sale product inquiry",
+      sentiment,
     };
   }
 
@@ -152,6 +176,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
       suggestedPriority: "normal",
       suggestedAgent: await getAgentEmailForCategory("contact_form"),
       reason: "Contact form submission — needs manual review",
+      sentiment,
     };
   }
 
@@ -161,6 +186,7 @@ export async function classifyTicket(subject: string, messageText: string): Prom
     suggestedPriority: "normal",
     suggestedAgent: null,
     reason: "Could not auto-classify — needs manual review",
+    sentiment,
   };
 }
 
