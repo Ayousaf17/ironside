@@ -731,6 +731,7 @@ export interface ReplyModalInput {
   lastCustomerMessage: string;
   macros: MacroOption[];
   selectedMacroId?: number;
+  draftText?: string | null;
 }
 
 function expandMacroTemplate(body: string): string {
@@ -741,10 +742,11 @@ function expandMacroTemplate(body: string): string {
 }
 
 export function formatReplyModal(input: ReplyModalInput): object {
-  const { ticketId, subject, lastCustomerMessage, macros, selectedMacroId } = input;
+  const { ticketId, subject, lastCustomerMessage, macros, selectedMacroId, draftText } = input;
 
   const selectedMacro = macros.find((m) => m.id === selectedMacroId) ?? macros[0];
-  const replyText = selectedMacro ? expandMacroTemplate(selectedMacro.body_text) : "";
+  // Draft takes priority over macro template
+  const replyText = draftText ?? (selectedMacro ? expandMacroTemplate(selectedMacro.body_text) : "");
 
   const subjectDisplay = subject.length > 44 ? `${subject.slice(0, 44)}…` : subject;
   const messagePreview = lastCustomerMessage.length > 280
@@ -808,6 +810,7 @@ export function formatReplyModal(input: ReplyModalInput): object {
   return {
     type: "modal",
     callback_id: "reply_modal",
+    notify_on_close: true,
     private_metadata: JSON.stringify({ ticketId, selectedMacroId: selectedMacro?.id ?? null, macroName: selectedMacro?.name ?? null }),
     title: { type: "plain_text", text: "Reply to Ticket", emoji: true },
     submit: { type: "plain_text", text: "Send Reply", emoji: true },
