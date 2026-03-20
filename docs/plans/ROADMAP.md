@@ -43,3 +43,12 @@ All tabs confirmed live with real data. Reporting view added.
 5. ~~Junior→Senior escalation flow~~ — **DONE** (junior agent tickets auto-escalate to senior after 2h no-response or 8h open)
 6. ~~Offline queue for Gorgias downtime~~ — **DONE** (failed write ops queued in DB for retry)
 7. ~~Cost accountability dashboard~~ — **DONE** (AI Performance tab already tracks per-request costs, daily/monthly rollups)
+
+## Sprint 5: Client-Ready Polish — **COMPLETE**
+
+1. ~~Weekly Slack digest~~ — **DONE** (re-enabled cron Monday 15:00 UTC, comprehensive behavior report)
+2. ~~SLA breach alerts~~ — **DONE** (escalation scan now detects SLA breaches, posts to #alerts with Reply buttons)
+3. ~~Spam false positive tracking~~ — **DONE** (reopened auto-close tickets logged as spam_false_positive)
+4. ~~Dashboard auth fix~~ — **DONE** (PR #72)
+5. ~~`/ironside status` command~~ — **DONE** (checks DB, Gorgias, Slack health + queue status)
+6. ~~Escalation scan cron~~ — **DONE** (re-enabled every 4 hours)
