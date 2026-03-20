@@ -14,11 +14,20 @@ jest.mock("../../lib/services/logging.service", () => ({
 
 import { POST, GET } from "@/app/api/webhooks/gorgias/events/route";
 
+const TEST_WEBHOOK_SECRET = "test-webhook-secret";
+
+beforeAll(() => {
+  process.env.GORGIAS_WEBHOOK_SECRET = TEST_WEBHOOK_SECRET;
+});
+
 function makeRequest(body: object): Request {
   return new Request("http://localhost:3001/api/webhooks/gorgias/events", {
     method: "POST",
     body: JSON.stringify(body),
-    headers: { "content-type": "application/json" },
+    headers: {
+      "content-type": "application/json",
+      "x-webhook-secret": TEST_WEBHOOK_SECRET,
+    },
   });
 }
 
@@ -124,7 +133,10 @@ describe("POST /api/webhooks/gorgias/events", () => {
     const req = new Request("http://localhost:3001/api/webhooks/gorgias/events", {
       method: "POST",
       body: "not-json",
-      headers: { "content-type": "application/json" },
+      headers: {
+        "content-type": "application/json",
+        "x-webhook-secret": TEST_WEBHOOK_SECRET,
+      },
     });
 
     const res = await POST(req);
