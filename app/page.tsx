@@ -47,37 +47,50 @@ export default function SupportCommandCenter() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const [tabErrors, setTabErrors] = useState<Record<string, string>>({});
+
   useEffect(() => {
-    const fetchAll = async () => {
+    async function safeFetch(tab: string): Promise<{ tab: string; data: Record<string, unknown> | null; error?: string }> {
       try {
-        const [pulseRes, behaviorRes, tiersRes, aiRes, feedbackRes] = await Promise.all([
-          fetch('/api/dashboard?tab=pulse'),
-          fetch('/api/dashboard?tab=behavior'),
-          fetch('/api/dashboard?tab=tiers'),
-          fetch('/api/dashboard?tab=ai'),
-          fetch('/api/dashboard?tab=feedback'),
-        ]);
-        const [pulseJson, behaviorJson, tiersJson, aiJson, feedbackJson] = await Promise.all([
-          pulseRes.json(),
-          behaviorRes.json(),
-          tiersRes.json(),
-          aiRes.json(),
-          feedbackRes.json(),
-        ]);
-        if (pulseJson.data) setPulseData(pulseJson.data);
-        if (behaviorJson.data) setBehaviorLogs(behaviorJson.data);
-        if (tiersJson.categories) {
-          setTierCategories(tiersJson.categories);
-          setTotalTicketsAnalyzed(tiersJson.totalTicketsAnalyzed ?? 0);
-        }
-        if (aiJson.today) setAiAnalytics(aiJson);
-        if (feedbackJson.tab === 'feedback') setFeedbackData(feedbackJson);
+        const res = await fetch(`/api/dashboard?tab=${tab}`);
+        if (!res.ok) return { tab, data: null, error: `HTTP ${res.status}` };
+        return { tab, data: await res.json() };
       } catch (err) {
-        console.error('Dashboard fetch error:', err);
-        setError('Failed to load dashboard data. Please refresh.');
-      } finally {
-        setLoading(false);
+        return { tab, data: null, error: err instanceof Error ? err.message : 'Network error' };
       }
+    }
+
+    const fetchAll = async () => {
+      const results = await Promise.all([
+        safeFetch('pulse'),
+        safeFetch('behavior'),
+        safeFetch('tiers'),
+        safeFetch('ai'),
+        safeFetch('feedback'),
+      ]);
+
+      const errors: Record<string, string> = {};
+      for (const r of results) {
+        if (r.error) {
+          errors[r.tab] = r.error;
+          continue;
+        }
+        if (!r.data) continue;
+        if (r.tab === 'pulse' && r.data.data) setPulseData(r.data.data as PulseCheck[]);
+        if (r.tab === 'behavior' && r.data.data) setBehaviorLogs(r.data.data as AgentBehaviorLog[]);
+        if (r.tab === 'tiers' && r.data.categories) {
+          setTierCategories(r.data.categories as TierCategory[]);
+          setTotalTicketsAnalyzed((r.data.totalTicketsAnalyzed as number) ?? 0);
+        }
+        if (r.tab === 'ai' && r.data.today) setAiAnalytics(r.data as unknown as AiAnalytics);
+        if (r.tab === 'feedback' && r.data.tab === 'feedback') setFeedbackData(r.data as unknown as FeedbackLoopData);
+      }
+      setTabErrors(errors);
+      // Only show full-page error if ALL tabs failed
+      if (Object.keys(errors).length === 5) {
+        setError('All dashboard data sources failed. Please refresh.');
+      }
+      setLoading(false);
     };
     fetchAll();
   }, []);
@@ -153,6 +166,26 @@ export default function SupportCommandCenter() {
             )}
           </div>
         </div>
+
+        {/* Tab error banner */}
+        {(() => {
+          const tabKeyMap: Record<string, string> = {
+            operations: 'pulse',
+            'agent-behavior': 'behavior',
+            'automation-control': 'tiers',
+            'feedback-loop': 'feedback',
+            'ai-performance': 'ai',
+            'deep-dive': 'pulse',
+          };
+          const errKey = tabKeyMap[activeTab];
+          const errMsg = errKey ? tabErrors[errKey] : undefined;
+          if (!errMsg) return null;
+          return (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              This tab failed to load data: {errMsg}. Other tabs may still work.
+            </div>
+          );
+        })()}
 
         {/* OPERATIONS TAB */}
         {activeTab === 'operations' && (

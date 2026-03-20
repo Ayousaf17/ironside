@@ -69,6 +69,9 @@ RESPONSE RULES:
 
 export const AGENT_MODEL = "anthropic/claude-sonnet-4-5";
 
+export const AGENT_MAX_TOKENS = 4096;
+export const AGENT_TIMEOUT_MS = 45_000; // 45s — leaves headroom within the 60s Vercel limit
+
 export function createRouterAgent(tools: StructuredToolInterface[] = []) {
   const llm = new ChatOpenAI({
     model: AGENT_MODEL,
@@ -76,6 +79,8 @@ export function createRouterAgent(tools: StructuredToolInterface[] = []) {
     configuration: {
       baseURL: "https://openrouter.ai/api/v1",
     },
+    maxTokens: AGENT_MAX_TOKENS,
+    timeout: AGENT_TIMEOUT_MS,
   });
 
   return createReactAgent({
