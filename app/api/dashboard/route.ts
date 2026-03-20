@@ -5,14 +5,9 @@ import { getTierReadiness } from "@/lib/analytics/tier-readiness";
 export const maxDuration = 30;
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (
-    process.env.CRON_SECRET &&
-    authHeader !== `Bearer ${process.env.CRON_SECRET}`
-  ) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  // No auth on dashboard — single-tenant internal tool.
+  // For client-facing access control, use Vercel password protection
+  // or Sign in with Vercel on the deployment.
   const tab = request.nextUrl.searchParams.get("tab") || "overview";
 
   try {
