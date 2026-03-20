@@ -42,7 +42,8 @@ export async function createApprovalRequest(data: {
 
 export async function handleApproval(
   slackThreadTs: string,
-  approved: boolean
+  approved: boolean,
+  reviewerSlackUserId?: string,
 ): Promise<PendingApproval | null> {
   const ctx = await prisma.conversationContext.findUnique({
     where: { slackThreadTs },
@@ -57,6 +58,28 @@ export async function handleApproval(
     where: { slackThreadTs },
     data: { pendingConfirmation: undefined },
   });
+
+  // Audit trail: log the human decision on the AI recommendation
+  try {
+    await prisma.agentBehaviorLog.create({
+      data: {
+        action: approved ? "ai_recommendation_approved" : "ai_recommendation_rejected",
+        ticketId: pending.ticketId,
+        category: pending.category,
+        agent: reviewerSlackUserId ? `slack:${reviewerSlackUserId}` : "unknown",
+        occurredAt: new Date(),
+        rawEvent: {
+          recommendedAction: pending.recommendedAction,
+          confidence: pending.confidence,
+          aiResponse: pending.agentResponse.slice(0, 500),
+          decision: approved ? "approved" : "rejected",
+          decidedAt: new Date().toISOString(),
+        },
+      },
+    });
+  } catch (err) {
+    console.error("[approval] Failed to log audit trail:", err);
+  }
 
   return approved ? pending : null;
 }

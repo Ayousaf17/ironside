@@ -238,7 +238,7 @@ export async function POST(request: NextRequest) {
   const approved = action.action_id === "approve_action";
 
   try {
-    const pending = await handleApproval(threadTs, approved);
+    const pending = await handleApproval(threadTs, approved, userId);
 
     if (approved && pending) {
       const result = await executeAction(pending.ticketId, pending.recommendedAction);

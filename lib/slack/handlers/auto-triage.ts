@@ -30,6 +30,21 @@ const PRIORITY_EMOJI: Record<string, string> = {
 
 const NO_TEMPLATE_TEXT = "No template for this category — draft a custom response.";
 
+// SLA targets per priority (minutes)
+const SLA_TARGETS: Record<string, number> = {
+  critical: 30,
+  high: 120,
+  normal: 240,
+  low: 480,
+};
+
+function formatSlaText(priority: string): string {
+  const targetMin = SLA_TARGETS[priority];
+  if (!targetMin) return "";
+  if (targetMin < 60) return `${targetMin}m`;
+  return `${Math.floor(targetMin / 60)}h`;
+}
+
 function parseTags(tagsField: unknown): string[] {
   if (!tagsField) return [];
   if (Array.isArray(tagsField)) return tagsField.map(String);
@@ -126,7 +141,7 @@ export async function handleAutoTriage(payload: GorgiasHttpIntegrationPayload): 
         { type: "mrkdwn", text: `*Category:*\n${categoryDisplay}` },
         { type: "mrkdwn", text: `*Priority:*\n${classification.suggestedPriority}` },
         { type: "mrkdwn", text: `*Assigned:*\n${assignedTo}` },
-        { type: "mrkdwn", text: `*Template:*\n${templateId ? `\`${templateId}\`` : "none"}` },
+        { type: "mrkdwn", text: `*SLA Target:*\n${formatSlaText(classification.suggestedPriority) || "—"}` },
       ],
     },
     {
