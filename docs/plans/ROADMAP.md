@@ -4,27 +4,27 @@
 
 ---
 
-## Sprint 1: Stability & Go-Live (before showing client)
+## Sprint 1: Stability & Go-Live (before showing client) — **COMPLETE**
 
 1. ~~Remove debug logs (GORGIAS_MOCK console.log)~~ — **DONE** (PR #63)
 2. ~~Fix Gorgias API status param rejection~~ — **DONE** (PR #63)
-3. Health check endpoint `/api/health` (DB + Gorgias + Slack connectivity)
-4. Webhook rate limiting (next-rate-limit already installed, just wire it)
-5. LLM agent token limit + timeout in Slack bot (prevent 60s hangs)
-6. Per-tab dashboard error handling (one failed tab shouldn't break the rest)
+3. ~~Health check endpoint `/api/health`~~ — **DONE** (PR #65)
+4. ~~Webhook rate limiting~~ — **DONE** (already wired in middleware.ts)
+5. ~~LLM agent token limit + timeout~~ — **DONE** (PR #65)
+6. ~~Per-tab dashboard error handling~~ — **DONE** (PR #65)
 
-## Sprint 2: Dashboard — The Visual Layer
+## Sprint 2: Dashboard — The Visual Layer — **COMPLETE**
 
-The dashboard at `app/page.tsx` is a core deliverable. It needs to be client-presentable.
+All tabs confirmed live with real data. Reporting view added.
 
-1. **Operations tab** — already working, needs real data flowing (pulse checks with real Gorgias)
-2. **Agent Behavior tab** — working, but data comes from backfill cron (now disabled). Wire to webhook-driven behavior logs instead
-3. **Automation Control tab** — component exists but NOT wired to API. Connect it
-4. **Feedback Loop tab** — working, shows AI correction data
-5. **AI Performance tab** — shows token usage/costs. Keep for internal visibility
-6. **Deep Dive tab** — charts work but need real data (WorkloadChart, TagTrends, P90Trend)
-7. **Add: Reporting view** — exportable summaries for Robert/leadership. Weekly/monthly rollups of ticket volume, resolution times, agent performance, AI accuracy
-8. **Add: Tier Readiness view** — show which categories are T3-ready based on accumulated training data
+1. ~~**Operations tab**~~ — **DONE** (live with pulse cron data)
+2. ~~**Agent Behavior tab**~~ — **DONE** (live via Gorgias webhooks)
+3. ~~**Automation Control tab**~~ — **DONE** (fully wired to /api/automation)
+4. ~~**Feedback Loop tab**~~ — **DONE** (AI accuracy tracking live)
+5. ~~**AI Performance tab**~~ — **DONE** (token/cost tracking live)
+6. ~~**Deep Dive tab**~~ — **DONE** (charts fed from pulse data)
+7. ~~**Reporting view**~~ — **DONE** (PR #66 — weekly/monthly rollups with CSV export)
+8. ~~**Tier Readiness view**~~ — **DONE** (covered by Automation Control tab)
 
 ## Sprint 3: Core Slack Value (what the support team uses daily)
 
