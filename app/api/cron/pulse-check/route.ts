@@ -1,64 +1,68 @@
 import { NextResponse } from "next/server";
 import { createPulseCheck } from "@/lib/repos/pulse-check.repo";
 import { logCronError } from "@/lib/services/logging.service";
-import { createRouterAgent } from "@/lib/langchain/router-agent";
-import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sendSlackBlocks, sendSlackMessage } from "@/lib/slack/client";
 import { formatPulseCheckBlocks } from "@/lib/slack/formatters";
 import { getTickets } from "@/lib/gorgias/client";
-import { calculateAnalytics } from "@/lib/analytics/calculate";
-import { HumanMessage } from "@langchain/core/messages";
+import { calculateAnalytics, type TicketAnalytics } from "@/lib/analytics/calculate";
 
 export const maxDuration = 60;
 
-const PULSE_CHECK_PROMPT = `Run a support pulse check using the sw3_analytics_insights tool.
-
-Then produce a Slack-formatted operational briefing following these rules:
-
-1. SEPARATE spam from real support. Report spam count/rate, then focus analysis on real tickets only.
-2. For resolution times, only report P50 and P90 on real tickets (exclude auto-closed spam). If P50 is under 2 min, note that it's likely skewed by auto-responses.
-3. Show agent workload breakdown (who's handling what, close rates).
-4. List the top 3 recurring question categories with ticket counts.
-5. Flag any open tickets that appear urgent or overdue (especially order status tickets past the 15-20 day build window).
-6. Give exactly 3 SPECIFIC action items — not generic advice like "review filters." Name the ticket IDs, agent names, or specific patterns to address.
-7. Use this Slack format:
-
-:bar_chart: *Support Pulse Check*
-_[date range] • [total] tickets_
-
-*Status:* Open: X | Closed: Y
-*Spam:* Z tickets (N%) — auto-closed non-support
-*Real Support:* R tickets
-
-*Resolution (real tickets only):*
-Avg: X min • P50: Y min • P90: Z min (N tickets analyzed)
-
-*Top Questions:*
-1. "Category" — N tickets
-2. "Category" — N tickets
-3. "Category" — N tickets
-
-*Workload:*
-- Agent: N tickets (N% close rate)
-- Unassigned: N (N%)
-
-*:rotating_light: Action Items:*
-1. [Specific action with ticket IDs or agent names]
-2. [Specific action]
-3. [Specific action]`;
-
-const agent = createRouterAgent([sw3AnalyticsTool]);
-
-function extractOpsNotes(summary: string): string[] {
-  const lines = summary.split("\n");
-  const startIdx = lines.findIndex((l) => l.includes("Action Items"));
-  if (startIdx === -1) return [];
+/** Generate actionable ops notes directly from analytics — no LLM needed. */
+function generateOpsNotes(analytics: TicketAnalytics): string[] {
   const notes: string[] = [];
-  for (let i = startIdx + 1; i < lines.length && notes.length < 6; i++) {
-    const match = lines[i].match(/^\d+\.\s*(.+)/);
-    if (match) notes.push(match[1].trim());
+
+  // Unassigned queue alert
+  if (analytics.unassignedCount > 0) {
+    const pct = analytics.unassignedRate;
+    const severity = pct > 50 ? "Critical" : pct > 25 ? "High" : "Note";
+    notes.push(`${severity}: ${analytics.unassignedCount} tickets unassigned (${pct}%) — need routing`);
   }
-  return notes;
+
+  // Spam rate
+  if (analytics.spamRate > 30) {
+    notes.push(`High spam: ${analytics.spamRate}% of volume is non-support — review auto-close filters`);
+  }
+
+  // Top category insight
+  if (analytics.topQuestions.length > 0) {
+    const top = analytics.topQuestions[0];
+    const ids = top.ticketIds?.slice(0, 5).map((id) => `#${id}`).join(", ") ?? "";
+    notes.push(`Top category: "${top.question}" (${top.count} tickets${ids ? ` — ${ids}` : ""})`);
+  }
+
+  // Resolution insight
+  if (analytics.p90ResolutionMinutes !== null && analytics.p90ResolutionMinutes > 60) {
+    notes.push(`P90 resolution at ${analytics.p90ResolutionMinutes} min — check for bottlenecks`);
+  }
+
+  // Open ticket pressure
+  if (analytics.openTickets > 0) {
+    notes.push(`${analytics.openTickets} tickets still open — ${analytics.closedTickets} closed in this window`);
+  }
+
+  return notes.slice(0, 5);
+}
+
+/** Build a plain-text summary from analytics for DB storage. */
+function buildSummary(analytics: TicketAnalytics, dateRange: string, opsNotes: string[]): string {
+  const lines = [
+    `Support Pulse Check — ${dateRange}`,
+    `${analytics.totalTickets} tickets: ${analytics.openTickets} open, ${analytics.closedTickets} closed`,
+    `Spam: ${analytics.spamCount} (${analytics.spamRate}%) | Real: ${analytics.realTickets}`,
+    "",
+    `Resolution: Avg ${analytics.avgResolutionMinutes ?? "–"}min • P50: ${analytics.p50ResolutionMinutes ?? "–"}min • P90: ${analytics.p90ResolutionMinutes ?? "–"}min`,
+    "",
+    "Top Questions:",
+    ...analytics.topQuestions.slice(0, 3).map((q, i) => `${i + 1}. "${q.question}" — ${q.count} tickets`),
+    "",
+    "Workload:",
+    ...analytics.agentBreakdown.map((a) => `• ${a.agent}: ${a.ticketCount} tickets (${a.closeRate}% close rate)`),
+    "",
+    "Ops Notes:",
+    ...opsNotes.map((n) => `• ${n}`),
+  ];
+  return lines.join("\n");
 }
 
 export async function GET(request: Request) {
@@ -73,7 +77,7 @@ export async function GET(request: Request) {
   let blocks: object[] = [];
 
   try {
-    // 1. Fetch tickets updated in the last 24 hours — one pulse per day window
+    // 1. Fetch open + recently closed tickets
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const tickets = await getTickets({ updatedAfter: twentyFourHoursAgo });
@@ -86,20 +90,12 @@ export async function GET(request: Request) {
       analytics.topTags.map((t) => [t.tag, t.count])
     );
 
-    // 2. Run LLM agent for Slack narrative + action items
-    //    Pass pre-computed analytics directly to avoid a second Gorgias API call
-    const analyticsContext = `Here is the analytics data (already computed — do NOT call any tools):\n\n${JSON.stringify(analytics, null, 2)}`;
-    const result = await agent.invoke({
-      messages: [new HumanMessage(`${analyticsContext}\n\n${PULSE_CHECK_PROMPT}`)],
-    });
+    // 2. Generate ops notes directly from analytics (no LLM — fast + reliable)
+    const opsNotes = generateOpsNotes(analytics);
 
-    const lastMessage = result.messages[result.messages.length - 1];
-    const summary =
-      typeof lastMessage.content === "string"
-        ? lastMessage.content
-        : JSON.stringify(lastMessage.content);
-
-    const opsNotes = extractOpsNotes(summary);
+    const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const dateRange = `${fmt(twentyFourHoursAgo)} – ${fmt(now)}`;
+    const summary = buildSummary(analytics, dateRange, opsNotes);
 
     // 3. Send to Slack as Block Kit (with fallback to plain text)
     blocks = formatPulseCheckBlocks({
@@ -117,17 +113,14 @@ export async function GET(request: Request) {
     try {
       await sendSlackBlocks("📊 Support Pulse Check", blocks, undefined, undefined, "ops");
     } catch (slackErr) {
-      // Extract the Slack validation detail so we can finally see what's wrong
       const sd = (slackErr as Record<string, unknown>)?.data as Record<string, unknown> | undefined;
       const msgs = (sd?.response_metadata as Record<string, unknown> | undefined)?.messages;
       slackBlocksError = JSON.stringify(msgs ?? (slackErr instanceof Error ? slackErr.message : slackErr)).slice(0, 500);
       console.error("[pulse-check] BLOCKS_FAILED:", slackBlocksError);
-      // Dump each block for debugging
       blocks.forEach((b: object, i: number) => {
         const blk = b as Record<string, unknown>;
         console.error(`[pulse-check] block[${i}]:`, JSON.stringify(blk).slice(0, 300));
       });
-      // Fallback: send the LLM summary as plain text so the team still gets the pulse check
       await sendSlackMessage(
         `📊 Pulse Check (blocks failed — detail below)\n\n${summary.slice(0, 2800)}\n\n⚠️ Block error: ${slackBlocksError}`,
         undefined,
@@ -136,7 +129,7 @@ export async function GET(request: Request) {
       );
     }
 
-    // 4. Persist — structured fields + raw blob + LLM summary
+    // 4. Persist
     await createPulseCheck({
       channel: "cron",
       summary,
@@ -148,7 +141,7 @@ export async function GET(request: Request) {
       avgResolutionMin: analytics.avgResolutionMinutes,
       topCategory: analytics.topQuestions[0]?.question ?? null,
       rawAnalytics: analytics as unknown as object,
-      insights: { source: "cron", prompt: "pulse-check-v2" },
+      insights: { source: "cron", prompt: "pulse-check-v3-no-llm" },
       dateRangeStart: twentyFourHoursAgo,
       dateRangeEnd: now,
       resolutionP50Min: analytics.p50ResolutionMinutes,
