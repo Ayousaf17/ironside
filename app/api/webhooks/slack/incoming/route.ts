@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { after } from "next/server";
 import { createHmac, timingSafeEqual } from "crypto";
 import { logApiCall, logApiError, logWebhookError } from "@/lib/services/logging.service";
-import { createRouterAgent, AGENT_MODEL } from "@/lib/langchain/router-agent";
+import { createRouterAgent, AGENT_MODEL, AGENT_TIMEOUT_MS } from "@/lib/langchain/router-agent";
 import { sw3AnalyticsTool } from "@/lib/langchain/tools/sw3-analytics";
 import { sw1ReaderTool } from "@/lib/langchain/tools/sw1-reader";
 import { sw2WriterTool } from "@/lib/langchain/tools/sw2-writer";
@@ -129,8 +129,13 @@ export async function POST(request: NextRequest) {
       }
       messages.push(new HumanMessage(text));
 
-      // Run the LangChain router agent
-      const result = await agent.invoke({ messages });
+      // Run the LangChain router agent with timeout guard
+      const result = await Promise.race([
+        agent.invoke({ messages }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("Agent timed out")), AGENT_TIMEOUT_MS)
+        ),
+      ]);
 
       const lastMessage = result.messages[result.messages.length - 1];
       const responseText =
