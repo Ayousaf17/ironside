@@ -249,9 +249,51 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Send response to Slack
+      // Send response to Slack — with action buttons if ticket IDs were referenced
       if (!hitlSent) {
-        await sendSlackMessage(responseText, channel, threadTs);
+        // Extract ticket IDs from tool results for action buttons
+        const referencedTickets: { id: number; subject: string }[] = [];
+        for (const m of result.messages) {
+          if (m.getType?.() !== "tool") continue;
+          try {
+            const parsed = JSON.parse(typeof m.content === "string" ? m.content : "{}");
+            if (parsed.ticket?.id) {
+              referencedTickets.push({ id: parsed.ticket.id, subject: (parsed.ticket.subject ?? "").slice(0, 80) });
+            }
+            if (parsed.tickets) {
+              for (const t of parsed.tickets.slice(0, 5)) {
+                if (t.id) referencedTickets.push({ id: t.id, subject: (t.subject ?? "").slice(0, 80) });
+              }
+            }
+          } catch { /* skip */ }
+        }
+
+        // Deduplicate
+        const seen = new Set<number>();
+        const uniqueTickets = referencedTickets.filter((t) => {
+          if (seen.has(t.id)) return false;
+          seen.add(t.id);
+          return true;
+        }).slice(0, 5);
+
+        if (uniqueTickets.length > 0) {
+          const blocks: object[] = [
+            { type: "section", text: { type: "mrkdwn", text: responseText } },
+            { type: "divider" },
+            {
+              type: "actions",
+              elements: uniqueTickets.map((t) => ({
+                type: "button",
+                text: { type: "plain_text", text: `Reply #${t.id}` },
+                action_id: "open_reply_modal",
+                value: JSON.stringify({ ticketId: t.id, tags: [], subject: t.subject }),
+              })),
+            },
+          ];
+          await sendSlackBlocks(responseText, blocks, channel, threadTs);
+        } else {
+          await sendSlackMessage(responseText, channel, threadTs);
+        }
       }
 
       // End session tracking (success)

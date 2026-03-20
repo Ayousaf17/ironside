@@ -26,13 +26,13 @@ All tabs confirmed live with real data. Reporting view added.
 7. ~~**Reporting view**~~ — **DONE** (PR #66 — weekly/monthly rollups with CSV export)
 8. ~~**Tier Readiness view**~~ — **DONE** (covered by Automation Control tab)
 
-## Sprint 3: Core Slack Value (what the support team uses daily)
+## Sprint 3: Core Slack Value (what the support team uses daily) — **COMPLETE**
 
-1. Per-category SLA tracking + Slack countdown timers
-2. Dynamic workload balancing (round-robin, not static routing)
-3. Interactive buttons on ALL actionable Slack responses (ticket lookups, AI recommendations, triage cards — not just pulse checks)
-4. Bulk spam actions in Slack
-5. AI recommendation audit trail (link actions to the AI recommendation that suggested them)
+1. ~~Per-category SLA tracking~~ — **DONE** (SLA targets on triage cards: 30m/2h/4h/8h by priority)
+2. ~~Dynamic workload balancing~~ — **DONE** (round-robin for generic categories, load-aware for all)
+3. ~~Interactive buttons on ALL actionable Slack responses~~ — **DONE** (Reply buttons on LLM agent responses when tickets referenced)
+4. ~~Bulk spam actions in Slack~~ — **DONE** (already existed — spam chain with close-all)
+5. ~~AI recommendation audit trail~~ — **DONE** (approval decisions logged to behavior log with reviewer ID)
 
 ## Sprint 4: Growth & Differentiation
 

@@ -78,7 +78,7 @@ describe("handleAutoTriage", () => {
     const [, blocks] = mockSlack.mock.calls[0];
     const blockText = JSON.stringify(blocks);
     expect(blockText).toContain("track order");
-    expect(blockText).toContain("order_status_in_build");
+    expect(blockText).toContain("SLA Target");
     expect(blockText).toContain("spencer");
     // Reply preview should include filled template body
     expect(blockText).toContain("John");
