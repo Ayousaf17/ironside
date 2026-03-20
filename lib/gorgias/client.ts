@@ -12,9 +12,7 @@ import * as write from "./write";
 
 function isMockMode(): boolean {
   const val = (process.env.GORGIAS_MOCK ?? "").trim().toLowerCase();
-  const mock = val !== "false";
-  console.log(`[gorgias] GORGIAS_MOCK raw="${process.env.GORGIAS_MOCK}" normalized="${val}" mock=${mock}`);
-  return mock;
+  return val !== "false";
 }
 
 export async function getTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
