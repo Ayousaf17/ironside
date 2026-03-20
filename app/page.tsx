@@ -18,6 +18,7 @@ import AutomationControlTab from '@/components/dashboard/AutomationControlTab';
 import { type TierCategory } from '@/components/dashboard/TierReadinessTab';
 import AiPerformanceTab, { type AiAnalytics } from '@/components/dashboard/AiPerformanceTab';
 import FeedbackLoopTab, { type FeedbackLoopData } from '@/components/dashboard/FeedbackLoopTab';
+import ReportingTab, { type ReportingData } from '@/components/dashboard/ReportingTab';
 
 type TimePeriod = '7d' | '30d' | '90d' | 'all';
 
@@ -44,6 +45,7 @@ export default function SupportCommandCenter() {
   const [totalTicketsAnalyzed, setTotalTicketsAnalyzed] = useState(0);
   const [aiAnalytics, setAiAnalytics] = useState<AiAnalytics | null>(null);
   const [feedbackData, setFeedbackData] = useState<FeedbackLoopData | null>(null);
+  const [reportingData, setReportingData] = useState<ReportingData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,6 +69,7 @@ export default function SupportCommandCenter() {
         safeFetch('tiers'),
         safeFetch('ai'),
         safeFetch('feedback'),
+        safeFetch('reporting'),
       ]);
 
       const errors: Record<string, string> = {};
@@ -84,10 +87,11 @@ export default function SupportCommandCenter() {
         }
         if (r.tab === 'ai' && r.data.today) setAiAnalytics(r.data as unknown as AiAnalytics);
         if (r.tab === 'feedback' && r.data.tab === 'feedback') setFeedbackData(r.data as unknown as FeedbackLoopData);
+        if (r.tab === 'reporting' && r.data.tab === 'reporting') setReportingData(r.data as unknown as ReportingData);
       }
       setTabErrors(errors);
       // Only show full-page error if ALL tabs failed
-      if (Object.keys(errors).length === 5) {
+      if (Object.keys(errors).length === 6) {
         setError('All dashboard data sources failed. Please refresh.');
       }
       setLoading(false);
@@ -176,6 +180,7 @@ export default function SupportCommandCenter() {
             'feedback-loop': 'feedback',
             'ai-performance': 'ai',
             'deep-dive': 'pulse',
+            reporting: 'reporting',
           };
           const errKey = tabKeyMap[activeTab];
           const errMsg = errKey ? tabErrors[errKey] : undefined;
@@ -276,6 +281,11 @@ export default function SupportCommandCenter() {
         {/* AI PERFORMANCE TAB */}
         {activeTab === 'ai-performance' && (
           <AiPerformanceTab data={aiAnalytics} />
+        )}
+
+        {/* REPORTING TAB */}
+        {activeTab === 'reporting' && (
+          <ReportingTab data={reportingData} />
         )}
       </div>
     </div>

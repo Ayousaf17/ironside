@@ -31,9 +31,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getBehaviorLogs());
       case "feedback":
         return NextResponse.json(await getFeedbackLoop());
+      case "reporting":
+        return NextResponse.json(await getReportingData());
       default:
         return NextResponse.json(
-          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback"] },
+          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback", "reporting"] },
           { status: 400 }
         );
     }
@@ -385,5 +387,139 @@ async function getFeedbackLoop() {
     })),
     weeklyAccuracy,
     classifierInsights,
+  };
+}
+
+async function getReportingData() {
+  const now = new Date();
+
+  // Build week boundaries (last 8 weeks)
+  const weeks: { start: Date; end: Date; label: string }[] = [];
+  for (let i = 7; i >= 0; i--) {
+    const end = new Date(now);
+    end.setDate(end.getDate() - i * 7);
+    end.setHours(23, 59, 59, 999);
+    const start = new Date(end);
+    start.setDate(start.getDate() - 6);
+    start.setHours(0, 0, 0, 0);
+    const label = `${start.toLocaleDateString("en-US", { month: "short", day: "numeric" })} – ${end.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+    weeks.push({ start, end, label });
+  }
+
+  // Monthly boundaries (last 3 months)
+  const months: { start: Date; end: Date; label: string }[] = [];
+  for (let i = 2; i >= 0; i--) {
+    const start = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const end = new Date(now.getFullYear(), now.getMonth() - i + 1, 0, 23, 59, 59, 999);
+    months.push({ start, end, label: start.toLocaleDateString("en-US", { month: "long", year: "numeric" }) });
+  }
+
+  // Fetch all data in parallel
+  const eightWeeksAgo = weeks[0].start;
+  const threeMonthsAgo = months[0].start;
+
+  const [pulseRows, behaviorRows, tokenRows, feedbackRows] = await Promise.all([
+    prisma.pulseCheck.findMany({
+      where: { createdAt: { gte: eightWeeksAgo } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        createdAt: true,
+        ticketCount: true,
+        openTickets: true,
+        closedTickets: true,
+        avgResolutionMin: true,
+        resolutionP50Min: true,
+        resolutionP90Min: true,
+        spamRate: true,
+        unassignedPct: true,
+      },
+    }),
+    prisma.agentBehaviorLog.findMany({
+      where: { occurredAt: { gte: eightWeeksAgo } },
+      select: {
+        agent: true,
+        action: true,
+        timeToRespondMin: true,
+        occurredAt: true,
+      },
+    }),
+    prisma.aiTokenUsage.aggregate({
+      where: { createdAt: { gte: threeMonthsAgo } },
+      _sum: { totalTokens: true, costUsd: true },
+      _count: { id: true },
+    }),
+    prisma.ticketAnalytics.findMany({
+      where: { aiMatchesHuman: { not: null }, updatedAt: { gte: eightWeeksAgo } },
+      select: { aiMatchesHuman: true, updatedAt: true },
+    }),
+  ]);
+
+  // Build weekly rollups
+  const weeklyRollups = weeks.map((w) => {
+    const pulses = pulseRows.filter((p) => p.createdAt >= w.start && p.createdAt <= w.end);
+    const behaviors = behaviorRows.filter((b) => b.occurredAt && b.occurredAt >= w.start && b.occurredAt <= w.end);
+    const feedback = feedbackRows.filter((f) => f.updatedAt >= w.start && f.updatedAt <= w.end);
+
+    const totalTickets = pulses.reduce((s, p) => s + (p.ticketCount ?? 0), 0);
+    const avgResolution = pulses.length > 0
+      ? Math.round(pulses.reduce((s, p) => s + (p.avgResolutionMin ?? 0), 0) / pulses.length)
+      : null;
+    const avgP90 = pulses.length > 0
+      ? Math.round(pulses.reduce((s, p) => s + (p.resolutionP90Min ?? 0), 0) / pulses.length)
+      : null;
+    const avgSpam = pulses.length > 0
+      ? Math.round(pulses.reduce((s, p) => s + (p.spamRate ?? 0), 0) / pulses.length * 10) / 10
+      : null;
+
+    // Agent breakdown
+    const agentMap = new Map<string, number>();
+    for (const b of behaviors) {
+      if (b.agent) agentMap.set(b.agent, (agentMap.get(b.agent) ?? 0) + 1);
+    }
+    const agentBreakdown = Array.from(agentMap.entries())
+      .map(([agent, actions]) => ({ agent, actions }))
+      .sort((a, b) => b.actions - a.actions);
+
+    const fbTotal = feedback.length;
+    const fbCorrect = feedback.filter((f) => f.aiMatchesHuman).length;
+
+    return {
+      week: w.label,
+      totalTickets,
+      avgResolutionMin: avgResolution,
+      p90Min: avgP90,
+      spamPct: avgSpam,
+      agentActions: behaviors.length,
+      agentBreakdown,
+      aiAccuracy: fbTotal > 0 ? Math.round((fbCorrect / fbTotal) * 1000) / 10 : null,
+      aiJudged: fbTotal,
+    };
+  });
+
+  // Monthly summary
+  const monthlySummary = months.map((m) => {
+    const pulses = pulseRows.filter((p) => p.createdAt >= m.start && p.createdAt <= m.end);
+    const behaviors = behaviorRows.filter((b) => b.occurredAt && b.occurredAt >= m.start && b.occurredAt <= m.end);
+
+    return {
+      month: m.label,
+      totalTickets: pulses.reduce((s, p) => s + (p.ticketCount ?? 0), 0),
+      avgResolutionMin: pulses.length > 0
+        ? Math.round(pulses.reduce((s, p) => s + (p.avgResolutionMin ?? 0), 0) / pulses.length)
+        : null,
+      totalAgentActions: behaviors.length,
+      pulseChecks: pulses.length,
+    };
+  });
+
+  return {
+    tab: "reporting",
+    weeklyRollups,
+    monthlySummary,
+    aiCosts: {
+      totalRequests: tokenRows._count.id,
+      totalTokens: tokenRows._sum.totalTokens ?? 0,
+      totalCostUsd: Math.round((tokenRows._sum.costUsd ?? 0) * 100) / 100,
+    },
   };
 }
