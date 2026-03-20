@@ -114,10 +114,19 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
 }
 
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
-  const url = `${getBaseUrl()}/api/tickets?limit=30`;
+  // Single page fetch — no pagination. 100 most recent tickets is enough for pulse checks.
+  const url = `${getBaseUrl()}/api/tickets?limit=100`;
   console.log(`[gorgias] fetchTickets url=${url}`);
-  const tickets = await fetchAllPages(url, getAuthHeaders());
-  // Client-side date filter (Gorgias list API may not support date params)
+  const headers = getAuthHeaders();
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const retryAfter = res.headers.get("retry-after") ?? "n/a";
+    throw new Error(`Gorgias API ${res.status}: ${body.slice(0, 200)} (retry-after: ${retryAfter})`);
+  }
+  const data = await res.json() as { data: Record<string, unknown>[] };
+  const tickets = data.data.map((t) => normalizeTicket(t));
+  // Client-side date filter
   if (options.updatedAfter) {
     const cutoff = options.updatedAfter.getTime();
     return tickets.filter((t) => new Date(t.created_datetime).getTime() >= cutoff);
