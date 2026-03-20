@@ -81,6 +81,34 @@ export async function GET(request: Request) {
     const now = new Date();
     const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const tickets = await getTickets({ updatedAfter: twentyFourHoursAgo });
+
+    // 2. Enrich closed non-spam tickets with messages for resolution time calculation
+    // The list endpoint doesn't return messages, so we fetch individually
+    const SPAM_TAGS = ["auto-close", "non-support-related"];
+    const closedReal = tickets.filter(
+      (t) => t.status === "closed" && !t.tags.some((tag) => SPAM_TAGS.includes(tag))
+    );
+    if (closedReal.length > 0) {
+      const { fetchTicket } = await import("@/lib/gorgias/read");
+      const enriched = await Promise.all(
+        closedReal.slice(0, 20).map(async (t) => {
+          try {
+            const full = await fetchTicket(t.id);
+            if (full && full.messages.length > 0) {
+              t.messages = full.messages;
+            }
+          } catch { /* use ticket as-is */ }
+          return t;
+        })
+      );
+      // Replace in tickets array
+      const enrichedMap = new Map(enriched.map((t) => [t.id, t]));
+      for (let i = 0; i < tickets.length; i++) {
+        const e = enrichedMap.get(tickets[i].id);
+        if (e) tickets[i] = e;
+      }
+    }
+
     const analytics = calculateAnalytics(tickets);
 
     const workloadMap = Object.fromEntries(
