@@ -52,3 +52,9 @@ All tabs confirmed live with real data. Reporting view added.
 4. ~~Dashboard auth fix~~ — **DONE** (PR #72)
 5. ~~`/ironside status` command~~ — **DONE** (checks DB, Gorgias, Slack health + queue status)
 6. ~~Escalation scan cron~~ — **DONE** (re-enabled every 4 hours)
+
+## Sprint 6: Data Accuracy & Hardening
+
+1. ~~Fix resolution time tracking~~ — **DONE** (pulse check now fetches individual ticket messages for closed tickets)
+2. Offline queue retry cron — flush queued Gorgias operations
+3. Dashboard loading skeletons — show per-tab loading states instead of blank
