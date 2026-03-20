@@ -35,9 +35,6 @@ yarn-error.log*
 !.env.example
 !.env.test
 
-# docs/plans (design docs belong in Notion, not the repo)
-/docs
-
 # vercel
 .vercel
 
