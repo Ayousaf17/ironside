@@ -115,6 +115,29 @@ export async function POST(request: Request) {
 
     console.log(`[gorgias-webhook] Logged ${count} behavior entries for ticket ${payload.ticket_id}`);
 
+    // Spam false positive detection: ticket reopened after auto-close
+    if (eventType === "ticket-updated") {
+      const isReopen = entries.some((e) => e.action === "reopen" || e.action === "status_change");
+      const hadSpamTag = payload.tags
+        ? String(payload.tags).toLowerCase().includes("auto-close")
+        : false;
+      if (isReopen && hadSpamTag) {
+        console.log(`[gorgias-webhook] Spam false positive: ticket #${ticketId} reopened`);
+        after(
+          logBehaviorEntries([{
+            agent: "system",
+            action: "spam_false_positive",
+            ticketId: Number(ticketId),
+            ticketSubject: String(payload.subject ?? ""),
+            tagsApplied: [],
+            reopened: true,
+            occurredAt: new Date(),
+            rawEvent: { reason: "reopened after auto-close", tags: String(payload.tags) },
+          }]).catch((err) => console.error("[gorgias-webhook] Spam FP log failed:", err))
+        );
+      }
+    }
+
     // Real-time processing for new tickets
     if (eventType === "ticket-created") {
       // Auto-triage: classify, tag, assign, post Slack card

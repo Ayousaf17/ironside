@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
 import { searchTickets, assignTicket } from "@/lib/gorgias/client";
-import { sendSlackMessage } from "@/lib/slack/client";
+import { sendSlackMessage, sendSlackBlocks } from "@/lib/slack/client";
 import { formatEscalationAlert } from "@/lib/slack/formatters";
 import { withRetry } from "@/lib/services/retry.service";
 import { logCronError } from "@/lib/services/logging.service";
 import { getAgentTier, getSeniorAgentFor, ESCALATION_THRESHOLDS } from "@/lib/services/agent-routing.service";
+
+// SLA targets in minutes (must match auto-triage.ts)
+const SLA_TARGETS_MIN: Record<string, number> = {
+  critical: 30,
+  high: 120,
+  normal: 240,
+  low: 480,
+};
+
+function inferPriority(ticket: { tags: string[]; subject: string }): string {
+  const combined = `${ticket.subject} ${ticket.tags.join(" ")}`.toLowerCase();
+  if (/urgent|critical|water.*cool|doa|no.*power|leak/i.test(combined)) return "critical";
+  if (/wrong.*item|damaged|verification.*stuck/i.test(combined)) return "high";
+  return "normal";
+}
 
 export const maxDuration = 30;
 
@@ -118,6 +133,51 @@ export async function GET(request: Request) {
           });
         }
       }
+    }
+
+    // SLA breach detection — alert on tickets past their first response SLA
+    const slaBreaches: { ticketId: number; subject: string; priority: string; slaMin: number; ageMin: number; assignee: string | null }[] = [];
+    for (const ticket of openTickets) {
+      if (ticket.tags.some((t) => t === "auto-close" || t === "non-support-related")) continue;
+      const messages = ticket.messages || [];
+      const hasResponse = messages.some((m) => m.from_agent === true || m.sender?.type === "agent");
+      if (hasResponse) continue;
+
+      const ageMin = Math.round((Date.now() - new Date(ticket.created_datetime).getTime()) / 60000);
+      const priority = inferPriority(ticket);
+      const slaMin = SLA_TARGETS_MIN[priority] ?? 240;
+
+      if (ageMin > slaMin) {
+        slaBreaches.push({
+          ticketId: ticket.id,
+          subject: ticket.subject.slice(0, 60),
+          priority,
+          slaMin,
+          ageMin,
+          assignee: ticket.assignee,
+        });
+      }
+    }
+
+    if (slaBreaches.length > 0) {
+      const blocks: object[] = [
+        { type: "header", text: { type: "plain_text", text: "⏰ SLA Breaches", emoji: true } },
+        { type: "context", elements: [{ type: "mrkdwn", text: `${slaBreaches.length} ticket${slaBreaches.length !== 1 ? "s" : ""} past first response SLA` }] },
+        ...slaBreaches.slice(0, 10).map((b) => ({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*#${b.ticketId}* — ${b.subject}\n${b.priority.toUpperCase()} SLA: ${b.slaMin}m | Age: ${b.ageMin}m | ${b.assignee?.split("@")[0] ?? "unassigned"}`,
+          },
+          accessory: {
+            type: "button",
+            text: { type: "plain_text", text: "Reply →" },
+            action_id: "open_reply_modal",
+            value: JSON.stringify({ ticketId: b.ticketId, tags: [], subject: b.subject }),
+          },
+        })),
+      ];
+      await sendSlackBlocks(`⏰ ${slaBreaches.length} SLA breaches`, blocks, undefined, undefined, "alerts");
     }
 
     // Only post to Slack if there are escalations

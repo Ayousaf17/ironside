@@ -25,6 +25,8 @@ export async function handleSlashCommand(text: string): Promise<SlashResult> {
       return handleTicket(args[0]);
     case "search":
       return handleSearch(args.join(" "));
+    case "status":
+      return handleStatus();
     case "pulse":
       return handlePulse();
     default:
@@ -172,6 +174,57 @@ async function handleSearch(query: string): Promise<SlashResult> {
   return { text: `Search results for "${query}"`, blocks, response_type: "ephemeral" };
 }
 
+// --- system status ---
+
+async function handleStatus(): Promise<SlashResult> {
+  const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
+    ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+    : process.env.NEXTAUTH_URL ?? "http://localhost:3000";
+
+  let healthStatus = "unknown";
+  let checks: Record<string, { ok: boolean; latencyMs: number; error?: string }> = {};
+
+  try {
+    const res = await fetch(`${baseUrl}/api/health`);
+    const data = await res.json();
+    healthStatus = data.status;
+    checks = data.checks ?? {};
+  } catch {
+    healthStatus = "unreachable";
+  }
+
+  const statusEmoji = healthStatus === "healthy" ? "🟢" : healthStatus === "degraded" ? "🟡" : "🔴";
+
+  const latest = await prisma.pulseCheck.findFirst({
+    orderBy: { createdAt: "desc" },
+    select: { createdAt: true, ticketCount: true, openTickets: true },
+  });
+
+  const queueInfo = await prisma.dashboardConfig.findUnique({ where: { key: "gorgias_offline_queue" } });
+  const queuedOps = Array.isArray(queueInfo?.value) ? (queueInfo.value as unknown[]).length : 0;
+
+  const lines = [
+    `${statusEmoji} *System Status: ${healthStatus.toUpperCase()}*`,
+    "",
+    ...Object.entries(checks).map(([name, c]) =>
+      `${c.ok ? "✅" : "❌"} *${name}:* ${c.ok ? `OK (${c.latencyMs}ms)` : c.error ?? "failed"}`
+    ),
+    "",
+    `📊 Last pulse: ${latest ? new Date(latest.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "never"}`,
+    ...(latest ? [`📬 ${latest.openTickets ?? 0} open / ${latest.ticketCount ?? 0} total tickets`] : []),
+    ...(queuedOps > 0 ? [`⚠️ ${queuedOps} queued operations (Gorgias was down)`] : []),
+  ];
+
+  return {
+    text: `System status: ${healthStatus}`,
+    blocks: [{
+      type: "section",
+      text: { type: "mrkdwn", text: lines.join("\n") },
+    }],
+    response_type: "ephemeral",
+  };
+}
+
 // --- manual pulse trigger ---
 
 async function handlePulse(): Promise<SlashResult> {
@@ -225,6 +278,7 @@ async function handleHelp(unknownCommand?: string): Promise<SlashResult> {
     "`/ironside stats` — latest support metrics",
     "`/ironside ticket <id>` — look up a ticket",
     "`/ironside search <keyword>` — search tickets by keyword",
+    "`/ironside status` — system health check",
     "`/ironside pulse` — trigger a manual pulse check",
     "`/ironside help` — show this message",
   ].join("\n");
