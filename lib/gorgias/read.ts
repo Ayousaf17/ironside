@@ -113,11 +113,29 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
   return all;
 }
 
+async function fetchSinglePage(url: string): Promise<GorgiasTicket[]> {
+  console.log(`[gorgias] fetch url=${url}`);
+  const headers = getAuthHeaders();
+  const res = await fetch(url, { headers });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    const retryAfter = res.headers.get("retry-after") ?? "n/a";
+    throw new Error(`Gorgias API ${res.status}: ${body.slice(0, 200)} (retry-after: ${retryAfter})`);
+  }
+  const data = await res.json() as { data: Record<string, unknown>[] };
+  return data.data.map((t) => normalizeTicket(t));
+}
+
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
-  const url = `${getBaseUrl()}/api/tickets?limit=30`;
-  console.log(`[gorgias] fetchTickets url=${url}`);
-  const tickets = await fetchAllPages(url, getAuthHeaders());
-  // Client-side date filter (Gorgias list API may not support date params)
+  const base = getBaseUrl();
+  // Fetch open tickets (the active queue) + recently closed (for resolution metrics)
+  // Two lightweight calls instead of paginating through entire history
+  const [open, closed] = await Promise.all([
+    fetchSinglePage(`${base}/api/tickets?limit=100&status=open`),
+    fetchSinglePage(`${base}/api/tickets?limit=50&status=closed`),
+  ]);
+  const tickets = [...open, ...closed];
+  // Client-side date filter if requested
   if (options.updatedAfter) {
     const cutoff = options.updatedAfter.getTime();
     return tickets.filter((t) => new Date(t.created_datetime).getTime() >= cutoff);
