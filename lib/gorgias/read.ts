@@ -128,13 +128,8 @@ async function fetchSinglePage(url: string): Promise<GorgiasTicket[]> {
 
 export async function fetchTickets(options: { updatedAfter?: Date } = {}): Promise<GorgiasTicket[]> {
   const base = getBaseUrl();
-  // Fetch open tickets (the active queue) + recently closed (for resolution metrics)
-  // Two lightweight calls instead of paginating through entire history
-  const [open, closed] = await Promise.all([
-    fetchSinglePage(`${base}/api/tickets?limit=100&status=open`),
-    fetchSinglePage(`${base}/api/tickets?limit=50&status=closed`),
-  ]);
-  const tickets = [...open, ...closed];
+  // Gorgias API doesn't support `status` as a query param — fetch all and split client-side
+  const tickets = await fetchSinglePage(`${base}/api/tickets?limit=100`);
   // Client-side date filter if requested
   if (options.updatedAfter) {
     const cutoff = options.updatedAfter.getTime();
@@ -156,11 +151,16 @@ export async function searchTickets(filters: TicketSearchFilters = {}): Promise<
   if (filters.limit) params.set("limit", String(filters.limit));
   if (filters.order_by) params.set("order_by", filters.order_by);
   if (filters.cursor) params.set("cursor", filters.cursor);
-  if (filters.status) params.set("status", filters.status);
+  // Note: Gorgias API doesn't support `status` as a query param — filter client-side
 
   const query = params.toString();
   const url = `${getBaseUrl()}/api/tickets${query ? `?${query}` : ""}`;
   let tickets = await fetchAllPages(url, getAuthHeaders());
+
+  // Client-side status filter (Gorgias API rejects status as query param)
+  if (filters.status) {
+    tickets = tickets.filter((t) => t.status === filters.status);
+  }
 
   // Client-side text search (Gorgias list API doesn't have a text search param)
   if (filters.search) {

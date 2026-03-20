@@ -35,9 +35,6 @@ yarn-error.log*
 !.env.example
 !.env.test
 
-# docs/plans (design docs belong in Notion, not the repo)
-/docs
-
 # vercel
 .vercel
 
@@ -46,3 +43,4 @@ yarn-error.log*
 next-env.d.ts
 
 /app/generated/prisma
+.env*.local
