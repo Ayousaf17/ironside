@@ -56,5 +56,5 @@ All tabs confirmed live with real data. Reporting view added.
 ## Sprint 6: Data Accuracy & Hardening
 
 1. ~~Fix resolution time tracking~~ — **DONE** (pulse check now fetches individual ticket messages for closed tickets)
-2. Offline queue retry cron — flush queued Gorgias operations
-3. Dashboard loading skeletons — show per-tab loading states instead of blank
+2. ~~Offline queue retry cron~~ — **DONE** (flush-queue runs every 30 min, replays failed Gorgias ops)
+3. Dashboard loading skeletons — already has full-page spinner + per-tab error banners
