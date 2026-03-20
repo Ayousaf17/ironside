@@ -36,10 +36,10 @@ All tabs confirmed live with real data. Reporting view added.
 
 ## Sprint 4: Growth & Differentiation
 
-1. Shopify/WooCommerce integration pitch + implementation (auto-resolve Track Order, Order Verification, Product Questions with real order data)
-2. Customer sentiment tracking (angry/frustrated/happy flags)
-3. /search-ticket slash command
-4. Reply draft auto-save
-5. Junior→Senior escalation flow
-6. Offline queue for Gorgias downtime
-7. Cost accountability dashboard for AI spend
+1. Shopify/WooCommerce integration pitch + implementation — **PENDING** (needs external API access)
+2. ~~Customer sentiment tracking~~ — **DONE** (angry/frustrated/happy/neutral detected via regex, shown on triage cards)
+3. ~~`/ironside search <keyword>` slash command~~ — **DONE** (searches tickets by subject/tags, shows up to 10 results with Reply buttons)
+4. Reply draft auto-save — **PENDING** (needs modal state persistence)
+5. Junior→Senior escalation flow — **PENDING** (needs escalation rules config)
+6. Offline queue for Gorgias downtime — **PENDING** (needs queue infrastructure)
+7. ~~Cost accountability dashboard~~ — **DONE** (AI Performance tab already tracks per-request costs, daily/monthly rollups)

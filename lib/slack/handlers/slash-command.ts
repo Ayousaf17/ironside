@@ -6,7 +6,7 @@
 //   /ironside pulse          — trigger a manual pulse check
 //   /ironside help           — list commands
 
-import { getTicket } from "@/lib/gorgias/client";
+import { getTicket, searchTickets } from "@/lib/gorgias/client";
 import { prisma } from "@/lib/prisma";
 
 export interface SlashResult {
@@ -23,6 +23,8 @@ export async function handleSlashCommand(text: string): Promise<SlashResult> {
       return handleStats();
     case "ticket":
       return handleTicket(args[0]);
+    case "search":
+      return handleSearch(args.join(" "));
     case "pulse":
       return handlePulse();
     default:
@@ -129,6 +131,47 @@ async function handleTicket(idArg: string | undefined): Promise<SlashResult> {
   };
 }
 
+// --- search tickets ---
+
+async function handleSearch(query: string): Promise<SlashResult> {
+  if (!query.trim()) {
+    return { text: "Usage: `/ironside search <keyword>`  e.g. `/ironside search wifi driver`" };
+  }
+
+  const tickets = await searchTickets({ search: query, limit: 100 });
+  const results = tickets.slice(0, 10);
+
+  if (results.length === 0) {
+    return { text: `No tickets found matching "${query}".` };
+  }
+
+  const blocks: object[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `🔍 Search: "${query}"`, emoji: true },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `Found ${tickets.length} ticket${tickets.length !== 1 ? "s" : ""}${tickets.length > 10 ? " (showing first 10)" : ""}` }],
+    },
+    ...results.map((t) => ({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `*#${t.id}* — ${t.subject}\n${t.status} · ${t.assignee?.split("@")[0] ?? "unassigned"} · ${t.tags.slice(0, 3).join(", ") || "no tags"}`,
+      },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "Reply →" },
+        action_id: "open_reply_modal",
+        value: JSON.stringify({ ticketId: t.id, tags: t.tags, subject: t.subject.slice(0, 100) }),
+      },
+    })),
+  ];
+
+  return { text: `Search results for "${query}"`, blocks, response_type: "ephemeral" };
+}
+
 // --- manual pulse trigger ---
 
 async function handlePulse(): Promise<SlashResult> {
@@ -181,6 +224,7 @@ async function handleHelp(unknownCommand?: string): Promise<SlashResult> {
   const commandList = [
     "`/ironside stats` — latest support metrics",
     "`/ironside ticket <id>` — look up a ticket",
+    "`/ironside search <keyword>` — search tickets by keyword",
     "`/ironside pulse` — trigger a manual pulse check",
     "`/ironside help` — show this message",
   ].join("\n");
