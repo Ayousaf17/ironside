@@ -92,7 +92,8 @@ async function fetchAllPages(startUrl: string, headers: HeadersInit): Promise<Go
     for (let attempt = 0; attempt < 3; attempt++) {
       pageRes = await fetch(fetchUrl, { headers });
       if (pageRes.status === 429) {
-        const wait = Math.pow(2, attempt + 1) * 1000; // 2s, 4s, 8s
+        const retryHeader = parseInt(pageRes.headers.get("retry-after") ?? "10", 10);
+        const wait = (isNaN(retryHeader) ? 10 : retryHeader + 2) * 1000; // respect header + 2s buffer
         console.log(`[gorgias] 429 rate limited, retrying in ${wait}ms (attempt ${attempt + 1}/3)`);
         await new Promise((r) => setTimeout(r, wait));
         continue;
