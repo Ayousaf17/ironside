@@ -9,6 +9,7 @@ import { mockCreateTicket, mockAssignTicket, mockSetPriority, mockSetStatus, moc
 import type { MockSearchFilters } from "./mock";
 import { fetchTickets, fetchTicket, searchTickets as fetchSearchTickets, fetchMacros, fetchMacro } from "./read";
 import * as write from "./write";
+import { enqueue } from "@/lib/services/offline-queue.service";
 
 function isMockMode(): boolean {
   const val = (process.env.GORGIAS_MOCK ?? "").trim().toLowerCase();
@@ -32,39 +33,52 @@ export async function searchTickets(filters: MockSearchFilters = {}): Promise<Go
 
 // --- Write operations (SW2) ---
 
+async function withQueue<T>(opName: string, args: unknown[], fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    // Queue for retry on network/API failures (not auth errors)
+    if (!msg.includes("Missing") && !msg.includes("environment variable")) {
+      enqueue(opName, args, msg).catch(() => {});
+    }
+    throw err;
+  }
+}
+
 export async function createTicket(data: { customer_email: string; subject: string; message: string }): Promise<object> {
   if (isMockMode()) return mockCreateTicket(data);
-  return write.createTicket(data);
+  return withQueue("createTicket", [data], () => write.createTicket(data));
 }
 
 export async function assignTicket(ticketId: number, assigneeEmail: string): Promise<object> {
   if (isMockMode()) return mockAssignTicket(ticketId, assigneeEmail);
-  return write.assignTicket(ticketId, assigneeEmail);
+  return withQueue("assignTicket", [ticketId, assigneeEmail], () => write.assignTicket(ticketId, assigneeEmail));
 }
 
 export async function setPriority(ticketId: number, priority: string): Promise<object> {
   if (isMockMode()) return mockSetPriority(ticketId, priority);
-  return write.setPriority(ticketId, priority);
+  return withQueue("setPriority", [ticketId, priority], () => write.setPriority(ticketId, priority));
 }
 
 export async function setStatus(ticketId: number, status: "open" | "closed"): Promise<object> {
   if (isMockMode()) return mockSetStatus(ticketId, status);
-  return write.setStatus(ticketId, status);
+  return withQueue("setStatus", [ticketId, status], () => write.setStatus(ticketId, status));
 }
 
 export async function updateTags(ticketId: number, tags: string[]): Promise<object> {
   if (isMockMode()) return mockUpdateTags(ticketId, tags);
-  return write.updateTags(ticketId, tags);
+  return withQueue("updateTags", [ticketId, tags], () => write.updateTags(ticketId, tags));
 }
 
 export async function replyPublic(ticketId: number, body: string): Promise<object> {
   if (isMockMode()) return mockReplyPublic(ticketId, body);
-  return write.replyPublic(ticketId, body);
+  return withQueue("replyPublic", [ticketId, body], () => write.replyPublic(ticketId, body));
 }
 
 export async function commentInternal(ticketId: number, body: string): Promise<object> {
   if (isMockMode()) return mockCommentInternal(ticketId, body);
-  return write.commentInternal(ticketId, body);
+  return withQueue("commentInternal", [ticketId, body], () => write.commentInternal(ticketId, body));
 }
 
 // --- Macros ---
