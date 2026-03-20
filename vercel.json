@@ -5,32 +5,8 @@
       "schedule": "0 14 * * *"
     },
     {
-      "path": "/api/cron/backfill-behavior",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/token-summary",
-      "schedule": "0 23 * * *"
-    },
-    {
-      "path": "/api/cron/sync-gorgias-users",
-      "schedule": "0 5 * * *"
-    },
-    {
       "path": "/api/cron/cleanup-context",
       "schedule": "0 0 * * *"
-    },
-    {
-      "path": "/api/cron/backtest-confidence",
-      "schedule": "0 3 * * *"
-    },
-    {
-      "path": "/api/cron/escalation-scan",
-      "schedule": "30 8 * * *"
-    },
-    {
-      "path": "/api/cron/weekly-behavior-report",
-      "schedule": "0 15 * * 1"
     }
   ]
 }
