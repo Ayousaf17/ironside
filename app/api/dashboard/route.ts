@@ -31,9 +31,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getFeedbackLoop());
       case "reporting":
         return NextResponse.json(await getReportingData());
+      case "trends":
+        return NextResponse.json(await getTrends());
       default:
         return NextResponse.json(
-          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback", "reporting"] },
+          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback", "reporting", "trends"] },
           { status: 400 }
         );
     }
@@ -527,4 +529,130 @@ async function getReportingData() {
       totalCostUsd: Math.round((tokenRows._sum.costUsd ?? 0) * 100) / 100,
     },
   };
+}
+
+// --- Trends (Sprint 10) ---
+
+async function getTrends() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+
+  const [pulseRows, behaviorRows, sentimentRows] = await Promise.all([
+    prisma.pulseCheck.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      orderBy: { createdAt: "asc" },
+      select: {
+        createdAt: true,
+        ticketCount: true,
+        openTickets: true,
+        closedTickets: true,
+        spamRate: true,
+        unassignedPct: true,
+        resolutionP50Min: true,
+        resolutionP90Min: true,
+        topQuestions: true,
+      },
+    }),
+    prisma.agentBehaviorLog.findMany({
+      where: { occurredAt: { gte: thirtyDaysAgo } },
+      select: {
+        agent: true,
+        action: true,
+        timeToRespondMin: true,
+        occurredAt: true,
+      },
+    }),
+    prisma.agentBehaviorLog.findMany({
+      where: {
+        occurredAt: { gte: thirtyDaysAgo },
+        action: "auto_triage",
+      },
+      select: { rawEvent: true, occurredAt: true },
+    }),
+  ]);
+
+  // 1. Daily volume trend
+  const dailyVolume = pulseRows.map((p) => ({
+    date: p.createdAt.toISOString().split("T")[0],
+    tickets: p.ticketCount ?? 0,
+    open: p.openTickets ?? 0,
+    closed: p.closedTickets ?? 0,
+    spamPct: p.spamRate ?? 0,
+    unassignedPct: p.unassignedPct ?? 0,
+    p50Min: p.resolutionP50Min ?? 0,
+    p90Min: p.resolutionP90Min ?? 0,
+  }));
+
+  // 2. Category breakdown over time
+  const categoryByDay = new Map<string, Map<string, number>>();
+  for (const p of pulseRows) {
+    const day = p.createdAt.toISOString().split("T")[0];
+    const questions = (p.topQuestions as { question: string; count: number }[]) ?? [];
+    if (!categoryByDay.has(day)) categoryByDay.set(day, new Map());
+    const dayMap = categoryByDay.get(day)!;
+    for (const q of questions) {
+      dayMap.set(q.question, (dayMap.get(q.question) ?? 0) + q.count);
+    }
+  }
+  const categoryTrend = Array.from(categoryByDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, cats]) => ({ date, categories: Object.fromEntries(cats) }));
+
+  // 3. Agent performance scores
+  const agentMap = new Map<string, { actions: number; replies: number; escalations: number; responseTimes: number[] }>();
+  for (const b of behaviorRows) {
+    if (!b.agent) continue;
+    if (!agentMap.has(b.agent)) agentMap.set(b.agent, { actions: 0, replies: 0, escalations: 0, responseTimes: [] });
+    const a = agentMap.get(b.agent)!;
+    a.actions++;
+    if (b.action === "reply" || b.action === "reply_ticket") a.replies++;
+    if (b.action === "escalation") a.escalations++;
+    if (b.timeToRespondMin != null) a.responseTimes.push(b.timeToRespondMin);
+  }
+  const agentScores = Array.from(agentMap.entries())
+    .filter(([name]) => name !== "system")
+    .map(([name, stats]) => {
+      const avgResponseMin = stats.responseTimes.length > 0
+        ? Math.round(stats.responseTimes.reduce((s, v) => s + v, 0) / stats.responseTimes.length * 10) / 10
+        : null;
+      const escalationRate = stats.actions > 0 ? Math.round((stats.escalations / stats.actions) * 1000) / 10 : 0;
+      return {
+        agent: name.split("@")[0],
+        totalActions: stats.actions,
+        replies: stats.replies,
+        escalations: stats.escalations,
+        escalationRate,
+        avgResponseMin,
+      };
+    })
+    .sort((a, b) => b.totalActions - a.totalActions);
+
+  // 4. Sentiment trend
+  const sentimentByDay = new Map<string, { angry: number; frustrated: number; happy: number; neutral: number }>();
+  for (const s of sentimentRows) {
+    const day = s.occurredAt.toISOString().split("T")[0];
+    if (!sentimentByDay.has(day)) sentimentByDay.set(day, { angry: 0, frustrated: 0, happy: 0, neutral: 0 });
+    const raw = s.rawEvent as Record<string, unknown> | null;
+    const sentiment = (raw?.sentiment as string) ?? "neutral";
+    const dayData = sentimentByDay.get(day)!;
+    if (sentiment in dayData) dayData[sentiment as keyof typeof dayData]++;
+  }
+  const sentimentTrend = Array.from(sentimentByDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, counts]) => ({ date, ...counts }));
+
+  // 5. Volume spike detection
+  let spikeAlert: { detected: boolean; currentVolume: number; avgVolume: number; multiplier: number } | null = null;
+  if (dailyVolume.length >= 2) {
+    const recent7 = dailyVolume.slice(-8, -1);
+    const today = dailyVolume[dailyVolume.length - 1];
+    if (recent7.length > 0 && today) {
+      const avg = Math.round(recent7.reduce((s, d) => s + d.tickets, 0) / recent7.length);
+      if (avg > 0) {
+        const multiplier = Math.round((today.tickets / avg) * 10) / 10;
+        spikeAlert = { detected: multiplier >= 2, currentVolume: today.tickets, avgVolume: avg, multiplier };
+      }
+    }
+  }
+
+  return { tab: "trends", dailyVolume, categoryTrend, agentScores, sentimentTrend, spikeAlert };
 }

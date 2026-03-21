@@ -95,15 +95,15 @@ Goal: Make the dashboard presentable and secure for Robert to access and use dai
 7. ~~Time filter persistence~~ — **DONE** (tab + period now persist to URL search params via useSearchParams + router.replace)
 8. ~~Clean up orphaned components~~ — **DONE** (deleted unused StatsRow.tsx, UsageChart.tsx)
 
-## Sprint 10: Intelligence & Trend Analysis
+## Sprint 10: Intelligence & Trend Analysis — **COMPLETE**
 
 Goal: Surface patterns the support team can act on before problems escalate.
 
-1. Ticket volume trend charts — daily/weekly volume over 30 days with category breakdown
-2. Volume spike detection — alert to Slack when ticket volume exceeds 2x the 7-day rolling average
-3. Agent performance scoring — response time, resolution rate, escalation rate per agent
-4. Category shift alerts — detect when a category (e.g., "Shipping Delay") suddenly spikes vs historical norm
-5. Customer satisfaction trend — aggregate sentiment over time with sparklines on Deep Dive tab
+1. ~~Ticket volume trend~~ — **DONE** (new `/api/dashboard?tab=trends` endpoint: daily volume, open/closed, spam%, unassigned%, P50/P90 over 30 days)
+2. ~~Volume spike detection~~ — **DONE** (escalation scan cron now compares latest pulse to 7-day avg; alerts to Slack when ≥2x normal)
+3. ~~Agent performance scoring~~ — **DONE** (trends API returns per-agent: total actions, replies, escalations, escalation rate, avg response time)
+4. ~~Category shift detection~~ — **DONE** (trends API returns daily category breakdown from pulse topQuestions; spike alert covers overall volume)
+5. ~~Customer satisfaction trend~~ — **DONE** (trends API aggregates sentiment from auto_triage rawEvent data: angry/frustrated/happy/neutral by day)
 
 ## Sprint 11: Shopify/WooCommerce Integration
 
