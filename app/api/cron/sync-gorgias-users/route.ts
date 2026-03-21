@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { upsertGorgiasUser } from "@/lib/repos/gorgias-user.repo";
 import { logCronError } from "@/lib/services/logging.service";
 
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (

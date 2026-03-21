@@ -31,7 +31,7 @@ export const maxDuration = 30;
 
 function verifySlackSignature(rawBody: string, request: NextRequest): boolean {
   const signingSecret = process.env.SLACK_SIGNING_SECRET;
-  if (!signingSecret) return true;
+  if (!signingSecret) return false; // fail closed — reject if secret not configured
 
   const timestamp = request.headers.get("x-slack-request-timestamp");
   const slackSignature = request.headers.get("x-slack-signature");
