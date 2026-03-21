@@ -33,9 +33,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getReportingData());
       case "trends":
         return NextResponse.json(await getTrends());
+      case "analytics":
+        return NextResponse.json(await getAdvancedAnalytics());
       default:
         return NextResponse.json(
-          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback", "reporting", "trends"] },
+          { error: `Unknown tab: ${tab}`, valid: ["overview", "agents", "ai", "tiers", "pulse", "behavior", "feedback", "reporting", "trends", "analytics"] },
           { status: 400 }
         );
     }
@@ -655,4 +657,149 @@ async function getTrends() {
   }
 
   return { tab: "trends", dailyVolume, categoryTrend, agentScores, sentimentTrend, spikeAlert };
+}
+
+// --- Advanced Analytics (Sprint 13) ---
+
+async function getAdvancedAnalytics() {
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+
+  const [behaviorRows, tokenUsage, pulseRows, ticketAnalytics] = await Promise.all([
+    prisma.agentBehaviorLog.findMany({
+      where: { occurredAt: { gte: thirtyDaysAgo } },
+      select: {
+        agent: true,
+        action: true,
+        timeToRespondMin: true,
+        touchesToResolution: true,
+        csatScore: true,
+        reopened: true,
+        category: true,
+      },
+    }),
+    prisma.aiTokenUsage.aggregate({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      _sum: { costUsd: true, totalTokens: true },
+      _count: { id: true },
+    }),
+    prisma.pulseCheck.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: { ticketCount: true },
+    }),
+    prisma.ticketAnalytics.findMany({
+      where: { createdAt: { gte: thirtyDaysAgo } },
+      select: {
+        resolutionTimeMin: true,
+        costSavingsUsd: true,
+        aiMatchesHuman: true,
+        touchCount: true,
+        wasReopened: true,
+      },
+    }),
+  ]);
+
+  // 1. Agent leaderboard
+  const agentMap = new Map<string, {
+    actions: number; replies: number; closes: number; escalations: number;
+    responseTimes: number[]; csatScores: number[]; reopens: number;
+  }>();
+  for (const b of behaviorRows) {
+    if (!b.agent || b.agent === "system") continue;
+    if (!agentMap.has(b.agent)) {
+      agentMap.set(b.agent, { actions: 0, replies: 0, closes: 0, escalations: 0, responseTimes: [], csatScores: [], reopens: 0 });
+    }
+    const a = agentMap.get(b.agent)!;
+    a.actions++;
+    if (b.action === "reply" || b.action === "reply_ticket") a.replies++;
+    if (b.action === "close") a.closes++;
+    if (b.action === "escalation") a.escalations++;
+    if (b.timeToRespondMin != null) a.responseTimes.push(b.timeToRespondMin);
+    if (b.csatScore != null) a.csatScores.push(b.csatScore);
+    if (b.reopened) a.reopens++;
+  }
+
+  const leaderboard = Array.from(agentMap.entries())
+    .map(([name, s]) => {
+      const avgResponse = s.responseTimes.length > 0
+        ? Math.round(s.responseTimes.reduce((sum, v) => sum + v, 0) / s.responseTimes.length * 10) / 10
+        : null;
+      const avgCsat = s.csatScores.length > 0
+        ? Math.round(s.csatScores.reduce((sum, v) => sum + v, 0) / s.csatScores.length * 10) / 10
+        : null;
+      // Score: weighted composite (lower response = better, higher CSAT = better, lower escalation = better)
+      let score = 50; // base
+      if (avgResponse != null) score += Math.max(0, 30 - avgResponse); // faster = more points (up to 30)
+      if (avgCsat != null) score += avgCsat * 4; // CSAT 1-5 → up to 20 points
+      if (s.actions > 0) score -= (s.escalations / s.actions) * 20; // escalation penalty
+      return {
+        agent: name.split("@")[0],
+        totalActions: s.actions,
+        replies: s.replies,
+        closes: s.closes,
+        escalations: s.escalations,
+        reopens: s.reopens,
+        avgResponseMin: avgResponse,
+        avgCsat,
+        score: Math.round(score),
+      };
+    })
+    .sort((a, b) => b.score - a.score);
+
+  // 2. Cost per ticket
+  const totalTickets = pulseRows.reduce((s, p) => s + (p.ticketCount ?? 0), 0);
+  const totalLlmCost = tokenUsage._sum.costUsd ?? 0;
+  const costPerTicket = totalTickets > 0 ? Math.round((totalLlmCost / totalTickets) * 100) / 100 : null;
+
+  // 3. Time-saved estimation
+  // Assumption: manual response takes ~15 min avg, AI-assisted takes actual avg
+  const MANUAL_AVG_MIN = 15;
+  const aiAssistedTimes = ticketAnalytics
+    .filter((t) => t.resolutionTimeMin != null)
+    .map((t) => t.resolutionTimeMin!);
+  const avgAiAssistedMin = aiAssistedTimes.length > 0
+    ? Math.round(aiAssistedTimes.reduce((s, v) => s + v, 0) / aiAssistedTimes.length * 10) / 10
+    : null;
+  const timeSavedPerTicketMin = avgAiAssistedMin != null ? Math.max(0, MANUAL_AVG_MIN - avgAiAssistedMin) : null;
+  const totalTimeSavedHours = timeSavedPerTicketMin != null && totalTickets > 0
+    ? Math.round((timeSavedPerTicketMin * totalTickets) / 60 * 10) / 10
+    : null;
+
+  // Cumulative cost savings from TicketAnalytics
+  const totalCostSavings = ticketAnalytics
+    .filter((t) => t.costSavingsUsd != null)
+    .reduce((s, t) => s + (t.costSavingsUsd ?? 0), 0);
+
+  // AI accuracy summary
+  const judged = ticketAnalytics.filter((t) => t.aiMatchesHuman != null);
+  const accurate = judged.filter((t) => t.aiMatchesHuman === true);
+  const accuracy = judged.length > 0 ? Math.round((accurate.length / judged.length) * 1000) / 10 : null;
+
+  return {
+    tab: "analytics",
+    period: "30d",
+    leaderboard,
+    costAnalysis: {
+      totalLlmCost: Math.round(totalLlmCost * 100) / 100,
+      totalTokens: tokenUsage._sum.totalTokens ?? 0,
+      totalRequests: tokenUsage._count.id,
+      totalTickets,
+      costPerTicket,
+    },
+    timeSaved: {
+      manualAvgMin: MANUAL_AVG_MIN,
+      aiAssistedAvgMin: avgAiAssistedMin,
+      savedPerTicketMin: timeSavedPerTicketMin,
+      totalSavedHours: totalTimeSavedHours,
+      totalTickets,
+    },
+    costSavings: {
+      totalUsd: Math.round(totalCostSavings * 100) / 100,
+      ticketsAnalyzed: ticketAnalytics.length,
+    },
+    aiAccuracy: {
+      accuracy,
+      judged: judged.length,
+      correct: accurate.length,
+    },
+  };
 }
