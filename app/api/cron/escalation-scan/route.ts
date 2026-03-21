@@ -5,6 +5,7 @@ import { formatEscalationAlert, formatEscalationBlocks } from "@/lib/slack/forma
 import { withRetry } from "@/lib/services/retry.service";
 import { logCronError } from "@/lib/services/logging.service";
 import { getAgentTier, getSeniorAgentFor, ESCALATION_THRESHOLDS } from "@/lib/services/agent-routing.service";
+import { prisma } from "@/lib/prisma";
 
 // SLA targets in minutes (must match auto-triage.ts)
 const SLA_TARGETS_MIN: Record<string, number> = {
@@ -200,6 +201,31 @@ export async function GET(request: Request) {
         const fallback = formatEscalationAlert(deduped, "scheduled");
         await withRetry(() => sendSlackBlocks(fallback, blocks, undefined, undefined, "alerts"));
       }
+    }
+
+    // Volume spike detection — compare latest pulse to 7-day average
+    try {
+      const recentPulses = await prisma.pulseCheck.findMany({
+        where: { createdAt: { gte: new Date(Date.now() - 8 * 86400000) } },
+        orderBy: { createdAt: "desc" },
+        select: { ticketCount: true, createdAt: true },
+        take: 8,
+      });
+      if (recentPulses.length >= 2) {
+        const [latest, ...previous] = recentPulses;
+        const avg = previous.reduce((s, p) => s + (p.ticketCount ?? 0), 0) / previous.length;
+        if (avg > 0 && (latest.ticketCount ?? 0) >= avg * 2) {
+          const multiplier = ((latest.ticketCount ?? 0) / avg).toFixed(1);
+          await sendSlackMessage(
+            `📈 *Volume Spike Detected*\nCurrent: ${latest.ticketCount} tickets · 7-day avg: ${Math.round(avg)} · ${multiplier}x normal volume`,
+            undefined,
+            undefined,
+            "alerts",
+          );
+        }
+      }
+    } catch (err) {
+      console.error("[escalation-scan] Spike detection failed:", err);
     }
 
     return NextResponse.json({
