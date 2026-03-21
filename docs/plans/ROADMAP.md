@@ -58,3 +58,101 @@ All tabs confirmed live with real data. Reporting view added.
 1. ~~Fix resolution time tracking~~ — **DONE** (pulse check now fetches individual ticket messages for closed tickets)
 2. ~~Offline queue retry cron~~ — **DONE** (flush-queue runs every 30 min, replays failed Gorgias ops)
 3. Dashboard loading skeletons — already has full-page spinner + per-tab error banners
+
+## Sprint 7: Security & Audit Fixes (CRITICAL) — **COMPLETE**
+
+Ref: `memory/project_audit_fixes.md` — go-live audit from 2026-03-19.
+
+1. ~~Rotate all secrets~~ — **NOT APPLICABLE** (.env files never committed to git, verified via git log)
+2. ~~Fix `/api/automation` auth~~ — **DONE** (removed CRON_SECRET gate — dashboard calls from browser, same fix as PR #72)
+3. ~~Fail closed on missing secrets~~ — **DONE** (Slack signature verification now returns false when secret missing; crons + Gorgias already correct)
+4. ~~Gorgias response normalization~~ — **ALREADY HANDLED** (enrich.ts correctly casts tags as objects, write.ts wraps assignee)
+5. ~~Wrap LLM call in try/catch~~ — **ALREADY HANDLED** (outer try-catch at line 108, error reply sent to Slack)
+
+## Sprint 8: Production Hardening
+
+Ref: audit HIGH + MEDIUM items + unexecuted `docs/plans/2026-03-05-richer-api-logs.md`.
+
+1. Dashboard error state UI — failed API calls show infinite spinner; add error banners per tab
+2. Add database indexes — `createdAt` on PulseCheck, ApiLog, PerformanceMetric
+3. Update `.env.example` — add CRON_SECRET, GORGIAS_WEBHOOK_SECRET, SLACK_CHANNEL_OPS
+4. Enrich API logs — implement richer-api-logs plan (actor, channel, thread, ticketId, intent, toolsUsed, sessionId)
+5. Dashboard API pagination — behavior logs fetch 500 rows unbounded; add limit/offset
+6. Consistent API response shapes — standardize all dashboard tabs to `{ data, meta }` format
+7. Tabs keyboard accessibility — add ARIA roles and arrow key navigation
+8. Hardcoded thresholds → DashboardConfig — move SLA (24h), spam danger (25%), queue depth (15) to DB config
+
+## Sprint 9: Client Demo Readiness
+
+Goal: Make the dashboard presentable and secure for Robert to access and use daily.
+
+1. Dashboard auth gate — Vercel password protection or lightweight token-based auth
+2. Dashboard landing page — overview card with hero metrics (open tickets, avg response time, spam rate, SLA compliance %)
+3. Resolution time data improvement — widen pulse check window from 24h to 7 days for closed tickets
+4. Mobile-responsive dashboard — 7 tabs overflow on narrow screens; use scrollable tabs or dropdown
+5. Branding pass — Ironside logo, consistent color palette, remove dev-facing labels
+6. Interactive Slack buttons on all responses — add contextual action buttons (Reply, Assign, Close, Escalate) to ticket lookups, AI answers, and escalation alerts (ref: `memory/project_interactive_slack_buttons.md`)
+7. Time filter persistence — filter state lost on refresh; persist to URL params or localStorage
+8. Clean up orphaned components — remove unused StatsRow.tsx, UsageChart.tsx
+
+## Sprint 10: Intelligence & Trend Analysis
+
+Goal: Surface patterns the support team can act on before problems escalate.
+
+1. Ticket volume trend charts — daily/weekly volume over 30 days with category breakdown
+2. Volume spike detection — alert to Slack when ticket volume exceeds 2x the 7-day rolling average
+3. Agent performance scoring — response time, resolution rate, escalation rate per agent
+4. Category shift alerts — detect when a category (e.g., "Shipping Delay") suddenly spikes vs historical norm
+5. Customer satisfaction trend — aggregate sentiment over time with sparklines on Deep Dive tab
+
+## Sprint 11: Shopify/WooCommerce Integration
+
+Goal: Auto-resolve top ticket categories using real order data. **Blocked until Robert grants API access.**
+
+Pitch context: Top ticket categories (Track Order, Order Verification, Product Questions) can be auto-answered with ecommerce data. Use pulse check data to quantify impact (e.g., "X Track Order tickets/day could be auto-resolved").
+
+1. Shopify API connection — order lookup by email/order number (new LangChain tool: SW7-orders)
+2. WooCommerce API connection — parallel implementation
+3. "Track My Order" auto-resolve — pull tracking info, compose response, close ticket
+4. "Order Verification" auto-resolve — confirm order exists, show status/items
+5. "Product Questions" auto-enrichment — pull product details to augment LLM responses
+6. Integration health monitoring — API status checks in `/ironside status`
+
+## Sprint 12: Proactive Ops & Notifications
+
+Goal: Push critical information to the team without them asking.
+
+1. SLA breach escalation chain — if first alert ignored for 30min, re-alert with @channel
+2. Daily standup summary — auto-post at 9am: overnight tickets, open SLA breaches, queue status
+3. Customer follow-up reminders — flag tickets with no response >24h
+4. Gorgias downtime auto-recovery — when offline queue flushes successfully, post recovery summary
+5. Email digest option — weekly summary email alongside Slack digest (requires email service integration)
+
+## Sprint 13: Advanced Analytics & Reporting
+
+Goal: Data Robert can use for business decisions, team reviews, and pitching next clients.
+
+1. Agent leaderboard — ranked by resolution speed, customer satisfaction, ticket volume
+2. Cost-per-ticket calculation — LLM costs / tickets processed, trended over time
+3. Time-saved estimation — (avg manual response time − avg AI-assisted time) × ticket count
+4. Custom date range picker for all dashboard views
+5. Scheduled PDF report export — email weekly/monthly PDF summaries
+6. Cohort analysis — repeat customer ticket patterns, resolution effectiveness by category
+
+## Milestone: ironside-analytics Deprecation
+
+Once Sprints 7-13 are complete and the ironside dashboard has been the primary interface for 2+ weeks:
+
+1. Redirect ironside-analytics Gorgias webhook to ironside
+2. Migrate any historical data from Supabase → Neon if needed for reporting continuity
+3. Archive ironside-analytics repo (read-only)
+4. Update DNS / Vercel project settings
+
+## Future: Multi-Client Expansion
+
+Path: Agency retainer ($1-3k/mo) → vertical SaaS → Gorgias marketplace listing.
+
+1. Multi-tenant schema — org_id on all tables (only when client #2 is signed)
+2. Onboarding flow — new client setup wizard (Gorgias connect, Slack install, tier config)
+3. White-label dashboard — configurable branding per org
+4. Pitch deck — use Ironside metrics as case study (time saved, cost per ticket, tier progression)

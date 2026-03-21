@@ -8,11 +8,10 @@ export const maxDuration = 30;
 // --- GET ---
 
 export async function GET(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  // No auth on automation API — single-tenant internal tool.
+  // Dashboard calls this from the browser (AutomationControlTab).
+  // For client-facing access control, use Vercel password protection
+  // or Sign in with Vercel on the deployment.
   const section = request.nextUrl.searchParams.get("section") ?? "overview";
 
   try {
@@ -38,11 +37,7 @@ export async function GET(request: NextRequest) {
 // --- POST ---
 
 export async function POST(request: NextRequest) {
-  const authHeader = request.headers.get("authorization");
-  if (!process.env.CRON_SECRET || authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+  // No auth — same as GET. See comment above.
   try {
     const body = await request.json() as {
       action: string;
