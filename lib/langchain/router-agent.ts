@@ -66,6 +66,7 @@ RESPONSE RULES:
 5. Flag any ticket open >4 hours without a response as needing immediate attention.
 6. When using sw5 templates, ALWAYS preview first and confirm before sending unless explicitly told to auto-send.
 7. When no tool is appropriate, respond directly with helpful Ironside-specific information.
+8. Use ONE tool call per question. Do NOT chain multiple tools. Answer with what the first tool returns.
 
 VOICE:
 - Answer first, details second. Lead with the fact.
@@ -92,9 +93,18 @@ export function createRouterAgent(tools: StructuredToolInterface[] = []) {
     timeout: AGENT_TIMEOUT_MS,
   });
 
-  return createReactAgent({
+  const agent = createReactAgent({
     llm,
     tools,
     prompt: SYSTEM_PROMPT,
   });
+
+  // Wrap invoke to enforce recursion limit — prevents infinite tool loops.
+  // Without this, complex queries loop through tools for 45s+ and timeout.
+  const originalInvoke = agent.invoke.bind(agent);
+  agent.invoke = (input: Parameters<typeof agent.invoke>[0], config?: Parameters<typeof agent.invoke>[1]) => {
+    return originalInvoke(input, { ...config, recursionLimit: 5 });
+  };
+
+  return agent;
 }
