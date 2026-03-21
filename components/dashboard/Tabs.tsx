@@ -8,15 +8,10 @@ interface TabsProps {
 }
 
 const tabs = [
-  { id: 'operations', label: 'Operations' },
-  { id: 'agent-behavior', label: 'Agent Behavior' },
-  { id: 'automation-control', label: 'Automation Control' },
-  { id: 'feedback-loop', label: 'Feedback Loop' },
-  { id: 'ai-performance', label: 'AI Performance' },
-  { id: 'deep-dive', label: 'Deep Dive' },
-  { id: 'reporting', label: 'Reporting' },
-  { id: 'trends', label: 'Trends' },
-  { id: 'analytics', label: 'Analytics' },
+  { id: 'command-center', label: 'Command Center' },
+  { id: 'team', label: 'Team' },
+  { id: 'ai-automation', label: 'AI & Automation' },
+  { id: 'reports', label: 'Reports' },
 ];
 
 export default function Tabs({ activeTab, onTabChange }: TabsProps) {
@@ -53,7 +48,7 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
       role="tablist"
       aria-label="Dashboard sections"
       onKeyDown={handleKeyDown}
-      className="inline-flex items-center gap-1 rounded-full bg-gray-100 p-1 overflow-x-auto max-w-full"
+      className="flex gap-1 border-b border-slate-200 overflow-x-auto"
     >
       {tabs.map((tab) => (
         <button
@@ -64,15 +59,14 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
           tabIndex={activeTab === tab.id ? 0 : -1}
           onClick={() => onTabChange(tab.id)}
           className={`
-            rounded-full px-5 py-2 text-sm font-medium transition-all duration-200 whitespace-nowrap
-            ${
-              activeTab === tab.id
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }
+            relative px-4 py-3 text-sm font-medium transition-colors duration-150 whitespace-nowrap
+            ${activeTab === tab.id ? 'text-slate-900' : 'text-slate-500 hover:text-slate-700'}
           `}
         >
           {tab.label}
+          {activeTab === tab.id && (
+            <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-ironside-gold rounded-full" />
+          )}
         </button>
       ))}
     </div>
