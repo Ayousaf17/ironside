@@ -55,20 +55,21 @@ export function formatPulseCheckBlocks(input: PulseCheckBlocksInput): object[] {
     });
   }
 
-  // ── Dashboard button ─────────────────────────────────────────────────────────
+  // ── Dashboard link button (URL type — opens directly, no webhook) ────────────
   const baseUrl = process.env.VERCEL_PROJECT_PRODUCTION_URL
     ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
     : "https://ironside-alpha.vercel.app";
 
-  blocks.push(
-    actionRow([
+  blocks.push({
+    type: "actions",
+    elements: [
       {
-        text: "View Dashboard →",
-        actionId: "open_dashboard",
-        value: JSON.stringify({ url: `${baseUrl}/dashboard` }),
+        type: "button",
+        text: { type: "plain_text", text: "View Dashboard →", emoji: true },
+        url: baseUrl,
       },
-    ])
-  );
+    ],
+  });
 
   return blocks;
 }
