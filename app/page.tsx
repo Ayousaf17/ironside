@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState, useCallback } from 'react';
+import { useSearchParams, useRouter } from 'next/navigation';
 import type { PulseCheck } from '@/types/pulse';
 import Tabs from '@/components/dashboard/Tabs';
 import PulseHeroCards from '@/components/dashboard/PulseHeroCards';
@@ -36,9 +37,30 @@ function formatDateRange(start: string, end: string): string {
   return `${s.toLocaleDateString('en-US', opts)} - ${e.toLocaleDateString('en-US', { ...opts, year: 'numeric' })}`;
 }
 
-export default function SupportCommandCenter() {
-  const [activeTab, setActiveTab] = useState('operations');
-  const [timePeriod, setTimePeriod] = useState<TimePeriod>('30d');
+export default function Page() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-gray-300 border-t-blue-600" />
+          <p className="mt-4 text-gray-500 text-sm">Loading Command Center...</p>
+        </div>
+      </div>
+    }>
+      <SupportCommandCenter />
+    </Suspense>
+  );
+}
+
+function SupportCommandCenter() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+
+  const initialTab = searchParams.get('tab') || 'operations';
+  const initialPeriod = (searchParams.get('period') || '30d') as TimePeriod;
+
+  const [activeTab, setActiveTab] = useState(initialTab);
+  const [timePeriod, setTimePeriod] = useState<TimePeriod>(initialPeriod);
   const [pulseData, setPulseData] = useState<PulseCheck[]>([]);
   const [behaviorLogs, setBehaviorLogs] = useState<AgentBehaviorLog[]>([]);
   const [tierCategories, setTierCategories] = useState<TierCategory[]>([]);
@@ -50,6 +72,24 @@ export default function SupportCommandCenter() {
   const [error, setError] = useState<string | null>(null);
 
   const [tabErrors, setTabErrors] = useState<Record<string, string>>({});
+
+  const updateUrl = useCallback((tab: string, period: TimePeriod) => {
+    const params = new URLSearchParams();
+    if (tab !== 'operations') params.set('tab', tab);
+    if (period !== '30d') params.set('period', period);
+    const qs = params.toString();
+    router.replace(qs ? `?${qs}` : '/', { scroll: false });
+  }, [router]);
+
+  const handleTabChange = useCallback((tab: string) => {
+    setActiveTab(tab);
+    updateUrl(tab, timePeriod);
+  }, [timePeriod, updateUrl]);
+
+  const handlePeriodChange = useCallback((period: TimePeriod) => {
+    setTimePeriod(period);
+    updateUrl(activeTab, period);
+  }, [activeTab, updateUrl]);
 
   useEffect(() => {
     async function safeFetch(tab: string): Promise<{ tab: string; data: Record<string, unknown> | null; error?: string }> {
@@ -150,13 +190,13 @@ export default function SupportCommandCenter() {
             </div>
           </div>
           <div className="flex flex-col items-end gap-2">
-            <Tabs activeTab={activeTab} onTabChange={setActiveTab} />
+            <Tabs activeTab={activeTab} onTabChange={handleTabChange} />
             {(activeTab === 'operations' || activeTab === 'deep-dive') && (
               <div className="inline-flex items-center gap-1 rounded-full bg-gray-100 p-0.5 text-xs">
                 {(['7d', '30d', '90d', 'all'] as TimePeriod[]).map((period) => (
                   <button
                     key={period}
-                    onClick={() => setTimePeriod(period)}
+                    onClick={() => handlePeriodChange(period)}
                     className={`rounded-full px-3 py-1 font-medium transition-all duration-200 ${
                       timePeriod === period
                         ? 'bg-white text-gray-900 shadow-sm'
