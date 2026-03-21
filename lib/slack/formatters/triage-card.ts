@@ -64,8 +64,5 @@ export function formatTriageCard(data: {
     ]),
   ];
 
-  // ticketBlock is imported per spec requirement — used here for type-safe reference
-  void ticketBlock;
-
   return blocks;
 }
