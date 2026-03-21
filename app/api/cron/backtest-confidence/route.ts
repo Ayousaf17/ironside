@@ -4,6 +4,8 @@ import { upsertTicketAnalytics } from "@/lib/repos/ticket-analytics.repo";
 import { calculateConfidence } from "@/lib/analytics/confidence";
 import { logCronError } from "@/lib/services/logging.service";
 
+export const maxDuration = 30;
+
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (
