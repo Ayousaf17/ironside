@@ -70,7 +70,7 @@ VOICE:
 - Keep it short. 2-5 lines max.
 - Suggest the one most impactful next action.`;
 
-export const AGENT_MODEL = "anthropic/claude-haiku-3-5";
+export const AGENT_MODEL = "anthropic/claude-3.5-haiku";
 
 export const AGENT_MAX_TOKENS = 2048;
 export const AGENT_TIMEOUT_MS = 8_000; // 8s — must finish within Hobby plan 10s limit
