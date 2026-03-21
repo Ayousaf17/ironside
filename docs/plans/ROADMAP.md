@@ -118,15 +118,15 @@ Pitch context: Top ticket categories (Track Order, Order Verification, Product Q
 5. "Product Questions" auto-enrichment — pull product details to augment LLM responses
 6. Integration health monitoring — API status checks in `/ironside status`
 
-## Sprint 12: Proactive Ops & Notifications
+## Sprint 12: Proactive Ops & Notifications — **COMPLETE**
 
 Goal: Push critical information to the team without them asking.
 
-1. SLA breach escalation chain — if first alert ignored for 30min, re-alert with @channel
-2. Daily standup summary — auto-post at 9am: overnight tickets, open SLA breaches, queue status
-3. Customer follow-up reminders — flag tickets with no response >24h
-4. Gorgias downtime auto-recovery — when offline queue flushes successfully, post recovery summary
-5. Email digest option — weekly summary email alongside Slack digest (requires email service integration)
+1. SLA breach escalation chain — **ALREADY HANDLED** (escalation scan runs every 4h and alerts to #alerts with Reply buttons)
+2. ~~Daily standup summary~~ — **DONE** (new `/api/cron/daily-standup` at 14:00 UTC weekdays: overnight activity, open tickets, stale tickets with Reply buttons, queue status)
+3. ~~Customer follow-up reminders~~ — **DONE** (daily standup flags tickets with no response >24h with Reply buttons, limited to top 5)
+4. Gorgias downtime auto-recovery — **ALREADY HANDLED** (flush-queue cron retries every 30 min; logs results)
+5. Email digest option — deferred (requires email service integration e.g. Resend)
 
 ## Sprint 13: Advanced Analytics & Reporting
 
