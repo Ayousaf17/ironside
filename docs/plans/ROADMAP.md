@@ -128,16 +128,16 @@ Goal: Push critical information to the team without them asking.
 4. Gorgias downtime auto-recovery — **ALREADY HANDLED** (flush-queue cron retries every 30 min; logs results)
 5. Email digest option — deferred (requires email service integration e.g. Resend)
 
-## Sprint 13: Advanced Analytics & Reporting
+## Sprint 13: Advanced Analytics & Reporting — **COMPLETE**
 
 Goal: Data Robert can use for business decisions, team reviews, and pitching next clients.
 
-1. Agent leaderboard — ranked by resolution speed, customer satisfaction, ticket volume
-2. Cost-per-ticket calculation — LLM costs / tickets processed, trended over time
-3. Time-saved estimation — (avg manual response time − avg AI-assisted time) × ticket count
-4. Custom date range picker for all dashboard views
-5. Scheduled PDF report export — email weekly/monthly PDF summaries
-6. Cohort analysis — repeat customer ticket patterns, resolution effectiveness by category
+1. ~~Agent leaderboard~~ — **DONE** (new `/api/dashboard?tab=analytics`: composite score from response time, CSAT, escalation rate; ranked by score)
+2. ~~Cost-per-ticket calculation~~ — **DONE** (total LLM cost / total tickets over 30 days)
+3. ~~Time-saved estimation~~ — **DONE** (manual avg 15min vs AI-assisted avg; total hours saved = savings × ticket count)
+4. Custom date range picker — deferred (URL params already persist period; full date picker is Sprint 9+ polish)
+5. Scheduled PDF report export — deferred (requires email service e.g. Resend + PDF generation)
+6. Cohort analysis — deferred (needs ticket customer ID tracking not currently in schema)
 
 ## Milestone: ironside-analytics Deprecation
 
