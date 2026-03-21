@@ -77,10 +77,10 @@ export async function GET(request: Request) {
   let blocks: object[] = [];
 
   try {
-    // 1. Fetch open + recently closed tickets
+    // 1. Fetch tickets updated in the last 7 days (widened from 24h to capture real resolution data)
     const now = new Date();
-    const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
-    const tickets = await getTickets({ updatedAfter: twentyFourHoursAgo });
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const tickets = await getTickets({ updatedAfter: sevenDaysAgo });
 
     // 2. Enrich closed non-spam tickets with messages for resolution time calculation
     // The list endpoint doesn't return messages, so we fetch individually
@@ -122,7 +122,7 @@ export async function GET(request: Request) {
     const opsNotes = generateOpsNotes(analytics);
 
     const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
-    const dateRange = `${fmt(twentyFourHoursAgo)} – ${fmt(now)}`;
+    const dateRange = `${fmt(sevenDaysAgo)} – ${fmt(now)}`;
     const summary = buildSummary(analytics, dateRange, opsNotes);
 
     // 3. Send to Slack as Block Kit (with fallback to plain text)
@@ -133,7 +133,7 @@ export async function GET(request: Request) {
         spamCount: analytics.spamCount,
         unassignedCount: analytics.unassignedCount,
       },
-      dateRangeStart: twentyFourHoursAgo,
+      dateRangeStart: sevenDaysAgo,
       dateRangeEnd: now,
     });
 
@@ -170,7 +170,7 @@ export async function GET(request: Request) {
       topCategory: analytics.topQuestions[0]?.question ?? null,
       rawAnalytics: analytics as unknown as object,
       insights: { source: "cron", prompt: "pulse-check-v3-no-llm" },
-      dateRangeStart: twentyFourHoursAgo,
+      dateRangeStart: sevenDaysAgo,
       dateRangeEnd: now,
       resolutionP50Min: analytics.p50ResolutionMinutes,
       resolutionP90Min: analytics.p90ResolutionMinutes,

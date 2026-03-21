@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { searchTickets, assignTicket } from "@/lib/gorgias/client";
 import { sendSlackMessage, sendSlackBlocks } from "@/lib/slack/client";
-import { formatEscalationAlert } from "@/lib/slack/formatters";
+import { formatEscalationAlert, formatEscalationBlocks } from "@/lib/slack/formatters";
 import { withRetry } from "@/lib/services/retry.service";
 import { logCronError } from "@/lib/services/logging.service";
 import { getAgentTier, getSeniorAgentFor, ESCALATION_THRESHOLDS } from "@/lib/services/agent-routing.service";
@@ -195,8 +195,11 @@ export async function GET(request: Request) {
         (a, b) => severityRank[a.severity] - severityRank[b.severity]
       );
 
-      const message = formatEscalationAlert(deduped, "scheduled");
-      await withRetry(() => sendSlackMessage(message));
+      const blocks = formatEscalationBlocks(deduped, "scheduled");
+      if (blocks.length > 0) {
+        const fallback = formatEscalationAlert(deduped, "scheduled");
+        await withRetry(() => sendSlackBlocks(fallback, blocks, undefined, undefined, "alerts"));
+      }
     }
 
     return NextResponse.json({

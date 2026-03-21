@@ -215,6 +215,45 @@ export function formatEscalationAlert(
   return lines.join("\n");
 }
 
+export function formatEscalationBlocks(
+  escalations: EscalationItem[],
+  scanType: string,
+): object[] {
+  if (escalations.length === 0) return [];
+
+  const blocks: object[] = [
+    {
+      type: "header",
+      text: { type: "plain_text", text: `🚨 Escalation Alert — ${escalations.length} item(s)`, emoji: true },
+    },
+    {
+      type: "context",
+      elements: [{ type: "mrkdwn", text: `Scan type: ${scanType}` }],
+    },
+  ];
+
+  for (const item of escalations.slice(0, 10)) {
+    const emoji = SEVERITY_EMOJI[item.severity] || ":white_circle:";
+    const assignee = item.assignee ? item.assignee.split("@")[0] : "unassigned";
+
+    blocks.push({
+      type: "section",
+      text: {
+        type: "mrkdwn",
+        text: `${emoji} *#${item.ticket_id}* — ${item.subject}\n\`${item.severity.toUpperCase()}\` · ${item.age_hours}h · ${assignee} · ${item.reason}`,
+      },
+      accessory: {
+        type: "button",
+        text: { type: "plain_text", text: "Reply →" },
+        action_id: "open_reply_modal",
+        value: JSON.stringify({ ticketId: item.ticket_id, tags: [], subject: item.subject.slice(0, 100) }),
+      },
+    });
+  }
+
+  return blocks;
+}
+
 // Maps topQuestions.question strings → Slack emoji and category key
 const QUESTION_EMOJI: Record<string, string> = {
   "Track Order":                      "📦",
