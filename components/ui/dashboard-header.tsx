@@ -26,7 +26,7 @@ export function DashboardHeader({
   const { dot, label } = statusMap[systemStatus];
 
   return (
-    <header className="flex h-14 items-center justify-between bg-ironside-black px-6 py-3 text-white">
+    <header className="no-print flex h-14 items-center justify-between bg-ironside-black px-6 py-3 text-white sm:flex-row flex-col gap-2 sm:h-14 h-auto">
       <h1 className="text-sm font-semibold tracking-wide">Ironside Support</h1>
       <div className="flex items-center gap-4 text-xs">
         {queuedOps > 0 && (

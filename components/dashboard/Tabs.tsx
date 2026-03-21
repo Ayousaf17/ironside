@@ -48,7 +48,7 @@ export default function Tabs({ activeTab, onTabChange }: TabsProps) {
       role="tablist"
       aria-label="Dashboard sections"
       onKeyDown={handleKeyDown}
-      className="flex gap-1 border-b border-slate-200 overflow-x-auto"
+      className="no-print flex gap-1 border-b border-slate-200 overflow-x-auto"
     >
       {tabs.map((tab) => (
         <button

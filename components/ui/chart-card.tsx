@@ -1,5 +1,14 @@
 import { cn } from "@/lib/utils";
 
+export function ChartCardSkeleton() {
+  return (
+    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 animate-pulse">
+      <div className="h-4 w-32 bg-slate-200 rounded mb-4" />
+      <div className="h-64 bg-slate-100 rounded-lg" />
+    </div>
+  );
+}
+
 interface ChartCardProps {
   title: string;
   subtitle?: string;
