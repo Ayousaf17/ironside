@@ -177,33 +177,34 @@ export async function GET() {
 
 // --- Data fetchers ---
 
-/** Fetch open tickets from Gorgias and compute SLA/stale counts. Falls back to zeros on failure. */
+/** Fetch open tickets from Gorgias with a 5s timeout. Falls back to zeros on timeout/failure. */
 async function fetchOpenTickets(): Promise<{
   slaBreaches: number;
   staleTickets: number;
 }> {
   try {
-    const tickets = await searchTickets({ status: "open" });
+    const tickets = await Promise.race([
+      searchTickets({ status: "open" }),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Gorgias timeout (5s)")), 5000)
+      ),
+    ]);
     const now = Date.now();
 
     let slaBreaches = 0;
     let staleTickets = 0;
 
     for (const ticket of tickets) {
-      // Skip spam / auto-close tickets
       if (isAutoClose(ticket.tags)) continue;
-
       const ageMs = now - new Date(ticket.created_datetime).getTime();
-      const ageMin = ageMs / 60_000;
-
-      if (ageMin > SLA_THRESHOLD_MIN) slaBreaches++;
+      if (ageMs / 60_000 > SLA_THRESHOLD_MIN) slaBreaches++;
       if (ageMs > STALE_THRESHOLD_MS) staleTickets++;
     }
 
     return { slaBreaches, staleTickets };
   } catch (err) {
     console.warn(
-      "[dashboard/summary] Gorgias unreachable, SLA/stale counts defaulting to 0:",
+      "[dashboard/summary] Gorgias unavailable, SLA/stale defaulting to 0:",
       err instanceof Error ? err.message : String(err)
     );
     return { slaBreaches: 0, staleTickets: 0 };
