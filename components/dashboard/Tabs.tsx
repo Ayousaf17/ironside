@@ -15,6 +15,8 @@ const tabs = [
   { id: 'ai-performance', label: 'AI Performance' },
   { id: 'deep-dive', label: 'Deep Dive' },
   { id: 'reporting', label: 'Reporting' },
+  { id: 'trends', label: 'Trends' },
+  { id: 'analytics', label: 'Analytics' },
 ];
 
 export default function Tabs({ activeTab, onTabChange }: TabsProps) {

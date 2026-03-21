@@ -59,6 +59,14 @@ export async function GET(request: Request) {
 
     const queuedOps = Array.isArray(queueConfig?.value) ? (queueConfig.value as unknown[]).length : 0;
 
+    // SLA breach detection — open tickets older than 4h without agent response
+    const SLA_DEFAULT_MIN = 240;
+    const slaBreaches = openTickets.filter((t) => {
+      if (t.tags.some((tag: string) => tag === "auto-close" || tag === "non-support-related")) return false;
+      const ageMin = Math.round((now.getTime() - new Date(t.created_datetime).getTime()) / 60000);
+      return ageMin > SLA_DEFAULT_MIN;
+    });
+
     // Build standup message
     const blocks: object[] = [];
 
@@ -120,6 +128,34 @@ export async function GET(request: Request) {
         blocks.push({
           type: "context",
           elements: [{ type: "mrkdwn", text: `_…and ${staleTickets.length - 5} more stale tickets_` }],
+        });
+      }
+    }
+
+    // SLA breaches
+    if (slaBreaches.length > 0) {
+      blocks.push({ type: "divider" });
+      blocks.push({
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*🚨 ${slaBreaches.length} SLA Breach${slaBreaches.length !== 1 ? 'es' : ''} (open >4h without response)*`,
+        },
+      });
+      for (const t of slaBreaches.slice(0, 3)) {
+        const ageH = Math.round((now.getTime() - new Date(t.created_datetime).getTime()) / 3600000);
+        blocks.push({
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*#${t.id}* — ${t.subject}\n${t.assignee?.split("@")[0] ?? "unassigned"} · ${ageH}h open`,
+          },
+          accessory: {
+            type: "button",
+            text: { type: "plain_text", text: "Reply →" },
+            action_id: "open_reply_modal",
+            value: JSON.stringify({ ticketId: t.id, tags: [], subject: t.subject.slice(0, 100) }),
+          },
         });
       }
     }
