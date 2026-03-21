@@ -22,8 +22,11 @@ export async function GET(request: NextRequest) {
         return NextResponse.json(await getTierStatus());
       case "pulse":
         return NextResponse.json(await getPulseChecks());
-      case "behavior":
-        return NextResponse.json(await getBehaviorLogs());
+      case "behavior": {
+        const limit = Math.min(Number(request.nextUrl.searchParams.get("limit")) || 200, 500);
+        const offset = Number(request.nextUrl.searchParams.get("offset")) || 0;
+        return NextResponse.json(await getBehaviorLogs(limit, offset));
+      }
       case "feedback":
         return NextResponse.json(await getFeedbackLoop());
       case "reporting":
@@ -228,10 +231,12 @@ async function getPulseChecks() {
   };
 }
 
-async function getBehaviorLogs() {
-  const rows = await prisma.agentBehaviorLog.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 500,
+async function getBehaviorLogs(limit = 200, offset = 0) {
+  const [rows, total] = await Promise.all([
+    prisma.agentBehaviorLog.findMany({
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      skip: offset,
     select: {
       id: true,
       createdAt: true,
@@ -252,10 +257,15 @@ async function getBehaviorLogs() {
       csatScore: true,
       occurredAt: true,
     },
-  });
+  }),
+    prisma.agentBehaviorLog.count(),
+  ]);
 
   return {
     tab: "behavior",
+    total,
+    limit,
+    offset,
     data: rows.map((b) => ({
       id: b.id,
       created_at: b.createdAt.toISOString(),
