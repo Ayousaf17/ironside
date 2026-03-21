@@ -49,6 +49,7 @@ describe("handleAutoTriage", () => {
       suggestedPriority: "low",
       suggestedAgent: null,
       reason: "Matched spam pattern",
+      sentiment: "neutral",
     });
 
     await handleAutoTriage(makePayload({ subject: "Business funding offer" }));
@@ -67,6 +68,7 @@ describe("handleAutoTriage", () => {
       suggestedPriority: "normal",
       suggestedAgent: "spencer@ironsidecomputers.com",
       reason: "Standard order status inquiry",
+      sentiment: "neutral",
     });
 
     await handleAutoTriage(makePayload({ customer_name: "John Smith" }));
@@ -92,6 +94,7 @@ describe("handleAutoTriage", () => {
       suggestedPriority: "normal",
       suggestedAgent: "danni-jean@ironsidecomputers.com",
       reason: "Return request",
+      sentiment: "neutral",
     });
 
     await handleAutoTriage(makePayload({ assignee_email: "spencer@ironsidecomputers.com" }));
@@ -107,6 +110,7 @@ describe("handleAutoTriage", () => {
       suggestedPriority: "normal",
       suggestedAgent: "spencer@ironsidecomputers.com",
       reason: "Pre-sale inquiry",
+      sentiment: "neutral",
     });
 
     await handleAutoTriage(makePayload({ subject: "Which GPU should I pick?" }));
@@ -124,6 +128,7 @@ describe("handleAutoTriage", () => {
       suggestedPriority: "normal",
       suggestedAgent: null,
       reason: "Order status",
+      sentiment: "neutral",
     });
 
     await handleAutoTriage(makePayload({ tags: "ORDER-STATUS" }));

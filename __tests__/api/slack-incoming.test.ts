@@ -59,17 +59,35 @@ jest.mock("@langchain/core/messages", () => ({
 // Must import route AFTER mocks are set up
 import { POST } from "@/app/api/webhooks/slack/incoming/route";
 import { NextRequest } from "next/server";
+import { createHmac } from "crypto";
+
+const TEST_SIGNING_SECRET = "test_signing_secret_for_unit_tests";
+
+// Set signing secret so verifySlackSignature doesn't fail closed
+process.env.SLACK_SIGNING_SECRET = TEST_SIGNING_SECRET;
+
+function signRequest(body: string): { "x-slack-request-timestamp": string; "x-slack-signature": string } {
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const baseString = `v0:${timestamp}:${body}`;
+  const hash = createHmac("sha256", TEST_SIGNING_SECRET).update(baseString).digest("hex");
+  return {
+    "x-slack-request-timestamp": timestamp,
+    "x-slack-signature": `v0=${hash}`,
+  };
+}
 
 function makeRequest(
   body: object,
   headers: Record<string, string> = {}
 ): NextRequest {
+  const bodyStr = JSON.stringify(body);
+  const sigHeaders = signRequest(bodyStr);
   const req = new NextRequest(
     "http://localhost:3001/api/webhooks/slack/incoming",
     {
       method: "POST",
-      body: JSON.stringify(body),
-      headers: { "content-type": "application/json", ...headers },
+      body: bodyStr,
+      headers: { "content-type": "application/json", ...sigHeaders, ...headers },
     }
   );
   return req;
