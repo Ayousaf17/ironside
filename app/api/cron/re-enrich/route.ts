@@ -80,7 +80,7 @@ export async function GET(request: Request) {
             responseCharCount: enrichedEntry.responseCharCount ?? null,
             touchesToResolution: enrichedEntry.touchesToResolution ?? null,
             ticketChannel: enrichedEntry.ticketChannel ?? row.ticketChannel,
-            ticketTags: enrichedEntry.ticketTags?.length ? enrichedEntry.ticketTags : row.ticketTags,
+            ticketTags: (enrichedEntry.ticketTags ?? row.ticketTags).filter((t): t is string => t != null),
           },
         });
 
