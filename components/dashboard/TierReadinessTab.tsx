@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Shield } from 'lucide-react';
+import { Shield, Lock, Unlock, ArrowRight, AlertTriangle, CheckCircle, Clock, TrendingUp } from 'lucide-react';
 
 import { MetricCard } from '@/components/ui/metric-card';
 import { ScoreRing } from '@/components/ui/score-ring';
@@ -68,6 +68,22 @@ interface ConfidenceBin {
   count: number;
 }
 
+interface ProjectionItem {
+  category: string;
+  weeklyTickets: number;
+  avgHandlingMin: number | null;
+  weeklyAgentHours: number | null;
+  monthlySavingsUsd: number | null;
+  primaryAgent: string | null;
+  totalTickets30d: number;
+}
+
+interface BlockerItem {
+  category: string;
+  tier: string;
+  blockers: string[];
+}
+
 export interface TierReadinessData {
   tierSummary: { t1: number; t2: number; t3: number; insufficient: number };
   tierReadiness: TierItem[];
@@ -81,6 +97,8 @@ export interface TierReadinessData {
   lastBacktest: { ranAt: string; categoriesUpdated: number } | null;
   sentimentTrend: SentimentDay[];
   categoryCostSavings: { category: string; costSavingsUsd: number }[];
+  projections?: ProjectionItem[];
+  blockers?: BlockerItem[];
 }
 
 // ---------------------------------------------------------------------------
@@ -151,12 +169,20 @@ function accuracyColor(value: number | null): string {
 function TierCard({
   item,
   costSavings,
+  projection,
+  blocker,
 }: {
   item: TierItem;
   costSavings?: number;
+  projection?: ProjectionItem;
+  blocker?: BlockerItem;
 }) {
   const [overrideOpen, setOverrideOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+
+  const isT3Ready = item.tier === 'T3';
+  const isT2 = item.tier === 'T2';
+  const nextTier = isT3Ready ? null : isT2 ? 'T3' : item.tier === 'T1' ? 'T2' : 'T1';
 
   async function handleOverride(newTier: TierKey) {
     setSaving(true);
@@ -168,7 +194,7 @@ function TierCard({
           action: 'set-tier',
           category: item.category,
           tier: newTier,
-          reason: 'Manual override',
+          reason: 'Manual override from T3 Control Panel',
         }),
       });
     } finally {
@@ -177,8 +203,18 @@ function TierCard({
     }
   }
 
+  // Border color by tier
+  const borderColor = isT3Ready
+    ? 'border-l-4 border-l-emerald-400'
+    : isT2
+      ? 'border-l-4 border-l-blue-400'
+      : item.tier === 'T1'
+        ? 'border-l-4 border-l-amber-400'
+        : 'border-l-4 border-l-slate-300';
+
   return (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5">
+    <div className={`bg-white rounded-xl border border-slate-200 shadow-sm p-5 ${borderColor}`}>
+      {/* Header */}
       <div className="flex items-start justify-between gap-2 mb-3">
         <span className="font-semibold text-sm text-slate-900">
           {item.category}
@@ -188,7 +224,8 @@ function TierCard({
         </StatusBadge>
       </div>
 
-      <div className="flex items-center gap-3">
+      {/* Accuracy ring + stats */}
+      <div className="flex items-center gap-3 mb-3">
         <ScoreRing
           value={item.accuracy}
           size={56}
@@ -197,52 +234,120 @@ function TierCard({
         />
         <div>
           <p className="text-xs text-slate-500">
-            {item.ticketCount} tickets &middot; {item.avgConfidence}% confidence
+            {item.ticketCount} judged &middot; {item.avgConfidence}% confidence
           </p>
           {costSavings != null && costSavings > 0 && (
             <p className="text-xs text-emerald-600 mt-0.5">
-              ${costSavings.toFixed(2)} saved
+              ${costSavings.toFixed(2)} saved so far
             </p>
           )}
         </div>
       </div>
 
-      <div className="mt-3">
-        {overrideOpen ? (
-          <div className="flex items-center gap-2">
-            <select
-              disabled={saving}
-              defaultValue=""
-              onChange={(e) => {
-                if (e.target.value) handleOverride(e.target.value as TierKey);
-              }}
-              className="text-xs border border-slate-200 rounded px-2 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-ironside-gold"
-            >
-              <option value="" disabled>
-                Select tier
-              </option>
-              <option value="T1">T1</option>
-              <option value="T2">T2</option>
-              <option value="T3">T3</option>
-            </select>
-            <button
-              type="button"
-              onClick={() => setOverrideOpen(false)}
-              className="text-xs text-slate-400 hover:text-slate-600"
-            >
-              Cancel
-            </button>
+      {/* Before/After Projection */}
+      {projection && projection.avgHandlingMin != null && (
+        <div className="bg-slate-50 rounded-lg p-3 mb-3">
+          <p className="text-xs font-medium text-slate-700 mb-1.5 flex items-center gap-1">
+            <TrendingUp className="h-3 w-3" />
+            If AI handles this autonomously:
+          </p>
+          <div className="space-y-1 text-xs text-slate-600">
+            <div className="flex justify-between">
+              <span>Current: {projection.primaryAgent ?? 'team'} handles {projection.weeklyTickets} tickets/week</span>
+            </div>
+            <div className="flex justify-between">
+              <span>Avg handling time</span>
+              <span className="font-mono">{projection.avgHandlingMin}min/ticket</span>
+            </div>
+            {projection.weeklyAgentHours != null && (
+              <div className="flex justify-between font-medium text-emerald-700">
+                <span>Weekly time saved</span>
+                <span className="font-mono">{projection.weeklyAgentHours}h/week</span>
+              </div>
+            )}
+            {projection.monthlySavingsUsd != null && (
+              <div className="flex justify-between font-medium text-emerald-700">
+                <span>Monthly savings</span>
+                <span className="font-mono">${projection.monthlySavingsUsd}/mo</span>
+              </div>
+            )}
           </div>
-        ) : (
+        </div>
+      )}
+
+      {/* Blockers */}
+      {blocker && blocker.blockers.length > 0 && !isT3Ready && (
+        <div className="mb-3 space-y-1">
+          {blocker.blockers.map((msg, i) => (
+            <div key={i} className="flex items-start gap-1.5 text-xs text-amber-700">
+              <AlertTriangle className="h-3 w-3 mt-0.5 shrink-0" />
+              <span>{msg}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* T3 Activation Button */}
+      {isT3Ready ? (
+        <button
+          type="button"
+          onClick={() => handleOverride('T3')}
+          disabled={saving}
+          className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-ironside-gold/10 border border-ironside-gold/30 text-ironside-gold font-medium text-xs hover:bg-ironside-gold/20 transition-colors"
+        >
+          <Unlock className="h-3.5 w-3.5" />
+          Enable Autonomous Mode
+        </button>
+      ) : blocker && blocker.blockers[0] === 'Ready for autonomous mode' ? (
+        <button
+          type="button"
+          onClick={() => handleOverride('T3')}
+          disabled={saving}
+          className="w-full mt-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-ironside-gold/10 border border-ironside-gold/30 text-ironside-gold font-medium text-xs hover:bg-ironside-gold/20 transition-colors"
+        >
+          <Unlock className="h-3.5 w-3.5" />
+          Enable Autonomous Mode
+        </button>
+      ) : (
+        <div className="flex items-center justify-between mt-1">
           <button
             type="button"
-            onClick={() => setOverrideOpen(true)}
-            className="text-xs text-slate-500 hover:text-ironside-gold transition-colors"
+            disabled
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 text-slate-400 text-xs cursor-not-allowed"
           >
-            Override Tier
+            <Lock className="h-3 w-3" />
+            {nextTier ? `Locked — needs ${nextTier}` : 'Locked'}
           </button>
-        )}
-      </div>
+          {!overrideOpen ? (
+            <button
+              type="button"
+              onClick={() => setOverrideOpen(true)}
+              className="text-xs text-slate-400 hover:text-ironside-gold transition-colors"
+            >
+              Override
+            </button>
+          ) : (
+            <div className="flex items-center gap-1">
+              <select
+                disabled={saving}
+                defaultValue=""
+                onChange={(e) => {
+                  if (e.target.value) handleOverride(e.target.value as TierKey);
+                }}
+                className="text-xs border border-slate-200 rounded px-1.5 py-1 text-slate-700 focus:outline-none focus:ring-1 focus:ring-ironside-gold"
+              >
+                <option value="" disabled>Tier</option>
+                <option value="T1">T1</option>
+                <option value="T2">T2</option>
+                <option value="T3">T3</option>
+              </select>
+              <button type="button" onClick={() => setOverrideOpen(false)} className="text-xs text-slate-400">
+                ✕
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -271,19 +376,61 @@ export default function TierReadinessTab({ data }: { data: TierReadinessData }) 
     sentimentTrend,
     categoryCostSavings,
   } = data;
+  const projections = data.projections ?? [];
+  const blockers = data.blockers ?? [];
 
   const topMatrix = feedback.matrix.slice(0, 5);
   const recentCorrections = feedback.recentCorrections.slice(0, 10);
 
-  // Build a lookup for per-category cost savings
+  // Build lookups
   const costMap = new Map<string, number>();
   for (const row of categoryCostSavings) {
     costMap.set(row.category, row.costSavingsUsd);
   }
+  const projMap = new Map<string, ProjectionItem>();
+  for (const p of projections) projMap.set(p.category, p);
+  const blockerMap = new Map<string, BlockerItem>();
+  for (const b of blockers) blockerMap.set(b.category, b);
+
+  const totalCategories = tierSummary.t1 + tierSummary.t2 + tierSummary.t3 + tierSummary.insufficient;
 
   return (
     <div className="space-y-6">
-      {/* ---- 1. Tier Summary ---- */}
+      {/* ---- 1. Progress Funnel ---- */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <h3 className="text-sm font-semibold text-slate-900 mb-4">Autonomy Pipeline</h3>
+
+        {/* Funnel visualization */}
+        <div className="flex items-center gap-2 mb-4">
+          {[
+            { label: 'Insufficient', count: tierSummary.insufficient, color: 'bg-slate-300', textColor: 'text-slate-700' },
+            { label: 'T1 Advisory', count: tierSummary.t1, color: 'bg-amber-400', textColor: 'text-amber-900' },
+            { label: 'T2 HITL', count: tierSummary.t2, color: 'bg-blue-500', textColor: 'text-white' },
+            { label: 'T3 Autonomous', count: tierSummary.t3, color: 'bg-emerald-500', textColor: 'text-white' },
+          ].map((stage, i) => {
+            const pct = totalCategories > 0 ? Math.max((stage.count / totalCategories) * 100, stage.count > 0 ? 15 : 5) : 25;
+            return (
+              <div key={stage.label} className="flex items-center gap-2" style={{ flex: pct }}>
+                <div className={`${stage.color} rounded-lg px-3 py-2 w-full text-center`}>
+                  <div className={`text-lg font-bold ${stage.textColor}`}>{stage.count}</div>
+                  <div className={`text-xs ${stage.textColor} opacity-80`}>{stage.label}</div>
+                </div>
+                {i < 3 && <ArrowRight className="h-4 w-4 text-slate-300 shrink-0" />}
+              </div>
+            );
+          })}
+        </div>
+
+        <p className="text-xs text-slate-500">
+          {totalCategories} total categories tracked. {tierSummary.t3 > 0
+            ? `${tierSummary.t3} ready for autonomous mode.`
+            : tierSummary.t2 > 0
+              ? `${tierSummary.t2} in human-in-the-loop review. Working toward T3.`
+              : 'Building training data. Categories will progress as accuracy improves.'}
+        </p>
+      </div>
+
+      {/* ---- 1b. Metric Cards ---- */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <MetricCard
           label="T1 — Advisory"
@@ -324,6 +471,8 @@ export default function TierReadinessTab({ data }: { data: TierReadinessData }) 
                 key={item.category}
                 item={item}
                 costSavings={costMap.get(item.category)}
+                projection={projMap.get(item.category)}
+                blocker={blockerMap.get(item.category)}
               />
             ))}
           </div>
