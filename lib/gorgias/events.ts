@@ -116,11 +116,19 @@ function isHttpIntegrationPayload(payload: Record<string, unknown>): boolean {
 
 function parseTags(tagsField: unknown): string[] {
   if (!tagsField) return [];
-  if (Array.isArray(tagsField)) return tagsField.map(String);
-  // Gorgias {{ticket.tags}} comes as a string like "order-status, vip" or "['order-status']"
+  if (Array.isArray(tagsField)) {
+    // Could be string[] or {name: string}[]
+    return tagsField.map(t => typeof t === "string" ? t : (t as Record<string, unknown>)?.name as string ?? "").filter(Boolean);
+  }
   const str = String(tagsField);
   if (!str || str === "[]" || str === "None") return [];
-  return str.split(",").map(t => t.replace(/[[\]']/g, "").trim()).filter(Boolean);
+  // Gorgias {{ticket.tags}} comes as Python-repr: "[{'id': 123, 'name': 'auto-close', ...}]"
+  // Extract just the 'name' values
+  const nameMatches = str.matchAll(/'name':\s*'([^']+)'/g);
+  const names = Array.from(nameMatches, m => m[1]);
+  if (names.length > 0) return names;
+  // Fallback: simple comma-split for plain tag strings like "order-status, vip"
+  return str.split(",").map(t => t.replace(/[[\]'{}/]/g, "").trim()).filter(Boolean);
 }
 
 export function parseHttpIntegrationEvent(payload: GorgiasHttpIntegrationPayload): BehaviorLogEntry[] {
