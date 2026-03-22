@@ -45,6 +45,7 @@ export async function GET(request: Request) {
 
     let enriched = 0;
     let errors = 0;
+    const firstError: { msg?: string; ticket?: number } = {};
 
     for (const row of rows) {
       try {
@@ -91,7 +92,13 @@ export async function GET(request: Request) {
         }
       } catch (err) {
         errors++;
-        console.warn(`[re-enrich] Failed for ticket ${row.ticketId}:`, err instanceof Error ? err.message : String(err));
+        const errMsg = err instanceof Error ? err.message : String(err);
+        console.warn(`[re-enrich] Failed for ticket ${row.ticketId}:`, errMsg);
+        // Include first error in response for debugging
+        if (errors === 1) {
+          (firstError as { msg: string; ticket: number }).msg = errMsg;
+          (firstError as { msg: string; ticket: number }).ticket = row.ticketId;
+        }
       }
     }
 
@@ -100,7 +107,7 @@ export async function GET(request: Request) {
     });
 
     console.log(`[re-enrich] Enriched ${enriched}/${rows.length}, ${errors} errors, ${remaining} remaining`);
-    return NextResponse.json({ ok: true, enriched, errors, remaining });
+    return NextResponse.json({ ok: true, enriched, errors, remaining, firstError: firstError.msg ? firstError : undefined });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
     console.error("[cron/re-enrich] Error:", errorMessage);
