@@ -1,3 +1,4 @@
+/** @deprecated DynamicTool wrapper replaced by lib/router/executor.ts executeRead(). */
 // LangChain DynamicTool wrapping the SW1 ticket reader workflow.
 // n8n equivalent: SW1 sub-workflow (gorgias_tickets_read + gorgias_get_ticket_by_id)
 

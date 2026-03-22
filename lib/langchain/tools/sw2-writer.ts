@@ -1,3 +1,4 @@
+/** @deprecated DynamicTool wrapper replaced by lib/router/executor.ts executeWrite(). */
 // LangChain DynamicTool wrapping the SW2 ticket writer workflow.
 // n8n equivalent: SW2 sub-workflow (Detect All Operations → Route Operations → 7 Gorgias API calls)
 //
