@@ -1,3 +1,4 @@
+/** @deprecated DynamicTool wrapper replaced by lib/router/executor.ts executeOps("analytics"). */
 // LangChain DynamicTool wrapping the SW3 analytics workflow.
 // n8n equivalent: SW3_AnalyticsInsights sub-workflow (Fetch Tickets → Calculate → Insights)
 

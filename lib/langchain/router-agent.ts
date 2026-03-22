@@ -1,3 +1,7 @@
+/**
+ * @deprecated Replaced by lib/router/ (Sprint 14-15). The ReAct agent with 6 tools
+ * times out on Vercel Hobby (60s limit). Use handleRouterMessage() instead.
+ */
 import { ChatOpenAI } from "@langchain/openai";
 import { createReactAgent } from "@langchain/langgraph/prebuilt";
 import type { StructuredToolInterface } from "@langchain/core/tools";

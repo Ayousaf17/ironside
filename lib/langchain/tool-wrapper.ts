@@ -1,3 +1,7 @@
+/**
+ * @deprecated Replaced by lib/router/executor.ts (Sprint 15). The router calls
+ * pure functions directly instead of wrapping them in DynamicTool + logging.
+ */
 import { DynamicTool } from "@langchain/core/tools";
 import type { StructuredToolInterface } from "@langchain/core/tools";
 import { logToolCall } from "@/lib/services/session.service";
