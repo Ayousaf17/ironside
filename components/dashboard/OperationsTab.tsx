@@ -73,6 +73,7 @@ export interface OperationsData {
   slaBreachTickets?: TicketDetail[];
   staleTicketsList?: TicketDetail[];
   categoryP90?: CategoryP90[];
+  morningBrief?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -246,6 +247,22 @@ export default function OperationsTab({ data }: { data: OperationsData }) {
 
   return (
     <div className="space-y-6">
+      {/* 0. Morning Brief */}
+      {data.morningBrief && (
+        <div className="bg-ironside-black rounded-xl p-5 text-white">
+          <div className="flex items-center gap-2 mb-2">
+            <Clock className="h-4 w-4 text-ironside-gold" />
+            <h3 className="text-sm font-semibold text-ironside-gold">Morning Brief</h3>
+            <span className="text-xs text-slate-400 ml-auto">
+              {data.system.lastPulse
+                ? new Date(data.system.lastPulse).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                : ""}
+            </span>
+          </div>
+          <p className="text-sm text-slate-300 leading-relaxed">{data.morningBrief}</p>
+        </div>
+      )}
+
       {/* 1. Alert Banner + Expandable Details */}
       {alerts.length > 0 && <AlertBanner alerts={alerts} />}
       <ExpandableTicketList
