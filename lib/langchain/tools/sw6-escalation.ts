@@ -11,7 +11,7 @@ import { DynamicTool } from "@langchain/core/tools";
 import { searchTickets } from "@/lib/gorgias/client";
 import type { GorgiasTicket } from "@/lib/gorgias/mock";
 
-interface EscalationItem {
+export interface EscalationItem {
   ticket_id: number;
   subject: string;
   severity: "critical" | "high" | "medium";
@@ -46,7 +46,7 @@ const CRITICAL_PATTERNS = [
   { pattern: /\b(chargeback|dispute|fraud|attorney|lawyer|bbb|better business)\b/i, reason: "Legal/chargeback threat" },
 ];
 
-function scanAging(tickets: GorgiasTicket[], thresholdHours: number): EscalationItem[] {
+export function scanAging(tickets: GorgiasTicket[], thresholdHours: number): EscalationItem[] {
   const results: EscalationItem[] = [];
   for (const ticket of tickets) {
     if (ticket.status !== "open") continue;
@@ -74,7 +74,7 @@ function scanAging(tickets: GorgiasTicket[], thresholdHours: number): Escalation
   return results.sort((a, b) => b.age_hours - a.age_hours);
 }
 
-function scanCritical(tickets: GorgiasTicket[]): EscalationItem[] {
+export function scanCritical(tickets: GorgiasTicket[]): EscalationItem[] {
   const results: EscalationItem[] = [];
   for (const ticket of tickets) {
     if (ticket.status !== "open") continue;
@@ -100,7 +100,7 @@ function scanCritical(tickets: GorgiasTicket[]): EscalationItem[] {
   return results;
 }
 
-function scanOverdue(tickets: GorgiasTicket[]): EscalationItem[] {
+export function scanOverdue(tickets: GorgiasTicket[]): EscalationItem[] {
   const results: EscalationItem[] = [];
   const BUILD_WINDOW_DAYS = 20; // 15-20 business days, use 20 as threshold
 

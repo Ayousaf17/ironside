@@ -1,4 +1,6 @@
 import type { GorgiasTicket } from "@/lib/gorgias/mock";
+import type { TicketAnalytics } from "@/lib/analytics/calculate";
+import type { EscalationItem } from "@/lib/langchain/tools/sw6-escalation";
 
 function ageHours(dateStr: string): number {
   const updated = new Date(dateStr);
@@ -15,11 +17,11 @@ function formatAge(hours: number): string {
 
 function assigneeLabel(assignee: string | null): string {
   if (!assignee) return "unassigned";
-  // Strip domain if it's an email, extract first name
   const local = assignee.includes("@") ? assignee.split("@")[0] : assignee;
-  // Capitalize first letter
   return local.charAt(0).toUpperCase() + local.slice(1);
 }
+
+// --- Read formatters ---
 
 export function formatTicketResult(ticket: GorgiasTicket): string {
   const lastMsgDate =
@@ -67,4 +69,59 @@ export function formatSearchResult(tickets: GorgiasTicket[], query: string): str
 
 export function formatChatResponse(response: string): string {
   return response.trim();
+}
+
+// --- Ops formatters ---
+
+export function formatAnalyticsResult(analytics: TicketAnalytics): string {
+  const lines: string[] = [
+    `Queue snapshot: ${analytics.openTickets} open, ${analytics.closedTickets} closed (${analytics.totalTickets} total)`,
+    `Spam: ${analytics.spamCount} (${analytics.spamRate}%)  |  Unassigned: ${analytics.unassignedCount} (${analytics.unassignedRate}%)`,
+  ];
+
+  if (analytics.p90ResolutionMinutes != null) {
+    lines.push(`Resolution P90: ${analytics.p90ResolutionMinutes}m (${analytics.ticketsAnalyzed} tickets analyzed)`);
+  }
+
+  if (analytics.agentBreakdown.length > 0) {
+    lines.push("");
+    lines.push("Agent workload:");
+    for (const agent of analytics.agentBreakdown.slice(0, 5)) {
+      lines.push(`  ${agent.agent}: ${agent.ticketCount} tickets`);
+    }
+  }
+
+  if (analytics.topQuestions.length > 0) {
+    lines.push("");
+    lines.push("Top categories:");
+    for (const q of analytics.topQuestions.slice(0, 5)) {
+      lines.push(`  ${q.question}: ${q.count}`);
+    }
+  }
+
+  return lines.join("\n");
+}
+
+export function formatEscalationResult(items: EscalationItem[]): string {
+  if (items.length === 0) return "No escalations found. All clear.";
+
+  const lines = [`Found ${items.length} escalation${items.length === 1 ? "" : "s"}:`];
+
+  for (const item of items.slice(0, 10)) {
+    const severityIcon = item.severity === "critical" ? "!!" : item.severity === "high" ? "!" : "";
+    const assignee = item.assignee
+      ? assigneeLabel(item.assignee)
+      : "unassigned";
+    lines.push(
+      `${severityIcon} #${item.ticket_id} — ${item.subject}`,
+      `   ${item.reason} | ${assignee} | ${item.age_hours}h old`,
+      `   Action: ${item.action}`,
+    );
+  }
+
+  return lines.join("\n");
+}
+
+export function formatWriteConfirmation(description: string): string {
+  return `${description}\nReply "yes" to confirm.`;
 }
