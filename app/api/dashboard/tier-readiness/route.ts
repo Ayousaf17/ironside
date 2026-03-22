@@ -26,6 +26,7 @@ export async function GET() {
       allAnalytics,
       recentCorrections,
       lastBacktestMetric,
+      behaviorByCategory,
       sentimentRows,
     ] = await Promise.all([
       // 1. Tier readiness
@@ -85,6 +86,21 @@ export async function GET() {
       prisma.performanceMetric.findFirst({
         where: { metric: { contains: "backtest" } },
         orderBy: { createdAt: "desc" },
+      }),
+
+      // 8. Before/After projections — agent handling data per category (30d)
+      prisma.agentBehaviorLog.findMany({
+        where: {
+          occurredAt: { gte: thirtyDaysAgo },
+          category: { not: null },
+        },
+        select: {
+          category: true,
+          agent: true,
+          timeToRespondMin: true,
+          action: true,
+          ticketId: true,
+        },
       }),
 
       // 7. Sentiment trend
@@ -291,6 +307,101 @@ export async function GET() {
       .filter((r) => r.costSavingsUsd > 0)
       .sort((a, b) => b.costSavingsUsd - a.costSavingsUsd);
 
+    // --- 9. Before/After Projections per category ---
+
+    // Compute: weekly ticket volume, avg handling time, primary agent per category
+    const projectionMap = new Map<
+      string,
+      {
+        ticketIds: Set<number>;
+        responseTimes: number[];
+        agents: Map<string, number>;
+        totalActions: number;
+      }
+    >();
+
+    for (const row of behaviorByCategory) {
+      if (!row.category) continue;
+      if (!projectionMap.has(row.category)) {
+        projectionMap.set(row.category, {
+          ticketIds: new Set(),
+          responseTimes: [],
+          agents: new Map(),
+          totalActions: 0,
+        });
+      }
+      const p = projectionMap.get(row.category)!;
+      p.ticketIds.add(row.ticketId);
+      p.totalActions++;
+      if (row.timeToRespondMin != null) p.responseTimes.push(row.timeToRespondMin);
+      if (row.agent && row.agent !== "system") {
+        const agentName = row.agent.split("@")[0];
+        p.agents.set(agentName, (p.agents.get(agentName) ?? 0) + 1);
+      }
+    }
+
+    const WEEKS_IN_PERIOD = 4; // 30 days ≈ 4 weeks
+    const HOURLY_COST_USD = 25; // estimated agent hourly cost for savings calc
+
+    const projections = Array.from(projectionMap.entries()).map(([category, data]) => {
+      const weeklyTickets = Math.round(data.ticketIds.size / WEEKS_IN_PERIOD * 10) / 10;
+      const avgHandlingMin = data.responseTimes.length > 0
+        ? Math.round(data.responseTimes.reduce((s, v) => s + v, 0) / data.responseTimes.length * 10) / 10
+        : null;
+      const weeklyAgentMin = avgHandlingMin != null ? Math.round(weeklyTickets * avgHandlingMin * 10) / 10 : null;
+      const weeklyAgentHours = weeklyAgentMin != null ? Math.round(weeklyAgentMin / 60 * 10) / 10 : null;
+      const monthlySavingsUsd = weeklyAgentHours != null ? Math.round(weeklyAgentHours * 4 * HOURLY_COST_USD * 100) / 100 : null;
+
+      // Primary agent (who handles most tickets in this category)
+      let primaryAgent: string | null = null;
+      let maxActions = 0;
+      for (const [agent, count] of data.agents) {
+        if (count > maxActions) { maxActions = count; primaryAgent = agent; }
+      }
+
+      return {
+        category,
+        weeklyTickets,
+        avgHandlingMin,
+        weeklyAgentHours,
+        monthlySavingsUsd,
+        primaryAgent,
+        totalTickets30d: data.ticketIds.size,
+      };
+    }).sort((a, b) => (b.monthlySavingsUsd ?? 0) - (a.monthlySavingsUsd ?? 0));
+
+    // --- 10. Blockers — what's needed for next tier ---
+
+    const TIER_THRESHOLDS = {
+      T2: { minAccuracy: 90, minTickets: 20 },
+      T3: { minAccuracy: 98, minTickets: 50 },
+    };
+
+    const blockers = tierReadinessResult.map((item) => {
+      const msgs: string[] = [];
+
+      if (item.tier === "insufficient_data") {
+        const needed = TIER_THRESHOLDS.T2.minTickets - item.ticketCount;
+        msgs.push(`Need ${needed} more judged tickets (have ${item.ticketCount}, need ${TIER_THRESHOLDS.T2.minTickets})`);
+      } else if (item.tier === "T1") {
+        const accuracyGap = TIER_THRESHOLDS.T2.minAccuracy - item.accuracy;
+        if (accuracyGap > 0) msgs.push(`Accuracy ${item.accuracy}% — need ${TIER_THRESHOLDS.T2.minAccuracy}% for T2 (+${Math.round(accuracyGap * 10) / 10}%)`);
+        if (item.ticketCount < TIER_THRESHOLDS.T2.minTickets) {
+          msgs.push(`Need ${TIER_THRESHOLDS.T2.minTickets - item.ticketCount} more judged tickets`);
+        }
+      } else if (item.tier === "T2") {
+        const accuracyGap = TIER_THRESHOLDS.T3.minAccuracy - item.accuracy;
+        if (accuracyGap > 0) msgs.push(`Accuracy ${item.accuracy}% — need ${TIER_THRESHOLDS.T3.minAccuracy}% for T3 (+${Math.round(accuracyGap * 10) / 10}%)`);
+        if (item.ticketCount < TIER_THRESHOLDS.T3.minTickets) {
+          msgs.push(`Need ${TIER_THRESHOLDS.T3.minTickets - item.ticketCount} more judged tickets`);
+        }
+      } else if (item.tier === "T3") {
+        msgs.push("Ready for autonomous mode");
+      }
+
+      return { category: item.category, tier: item.tier, blockers: msgs };
+    });
+
     // --- Assemble response ---
 
     return NextResponse.json({
@@ -306,6 +417,8 @@ export async function GET() {
       lastBacktest,
       sentimentTrend,
       categoryCostSavings,
+      projections,
+      blockers,
     });
   } catch (error) {
     const errorMessage =
