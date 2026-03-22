@@ -14,6 +14,7 @@ export async function GET() {
       judgedRows,
       recentCorrections,
       tokenUsage,
+      costGrouped,
       pulseRows,
       ticketAnalytics,
       tierReadiness,
@@ -51,6 +52,13 @@ export async function GET() {
       prisma.aiTokenUsage.aggregate({
         where: { createdAt: { gte: thirtyDaysAgo } },
         _sum: { costUsd: true },
+      }),
+      // Cost breakdown by source+model
+      prisma.aiTokenUsage.groupBy({
+        by: ["source", "model"],
+        where: { createdAt: { gte: thirtyDaysAgo } },
+        _sum: { costUsd: true },
+        _count: true,
       }),
       // Pulse check ticket counts
       prisma.pulseCheck.findMany({
@@ -160,6 +168,17 @@ export async function GET() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([date, counts]) => ({ date, ...counts }));
 
+    // --- Cost Breakdown ---
+
+    const costBreakdown = costGrouped
+      .map((row) => ({
+        category: `${row.source} / ${row.model.split("/").pop() ?? row.model}`,
+        totalCost: Math.round((row._sum.costUsd ?? 0) * 1000) / 1000,
+        requestCount: row._count,
+      }))
+      .filter((r) => r.totalCost > 0)
+      .sort((a, b) => b.totalCost - a.totalCost);
+
     // --- Assemble response ---
 
     return NextResponse.json({
@@ -184,6 +203,7 @@ export async function GET() {
         matrix,
       },
       sentimentTrend,
+      costBreakdown,
     });
   } catch (error) {
     const errorMessage =
