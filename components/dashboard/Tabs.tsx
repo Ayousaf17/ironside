@@ -8,10 +8,10 @@ interface TabsProps {
 }
 
 const tabs = [
-  { id: 'command-center', label: 'Command Center' },
-  { id: 'team', label: 'Team' },
-  { id: 'ai-automation', label: 'AI & Automation' },
-  { id: 'reports', label: 'Reports' },
+  { id: 'operations', label: 'Operations' },
+  { id: 'agent-intelligence', label: 'Agent Intelligence' },
+  { id: 'tier-readiness', label: 'Tier Readiness' },
+  { id: 'cost-data', label: 'Cost & Data' },
 ];
 
 export default function Tabs({ activeTab, onTabChange }: TabsProps) {

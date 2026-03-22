@@ -6,74 +6,49 @@ import dynamic from 'next/dynamic';
 import Tabs from '@/components/dashboard/Tabs';
 import { DashboardHeader } from '@/components/ui/dashboard-header';
 import { TabSkeleton } from '@/components/ui/tab-skeleton';
+import { EmptyState } from '@/components/ui/empty-state';
 
 // Dynamic imports — each tab is code-split and loaded on demand
-const CommandCenterTab = dynamic(
-  () => import('@/components/dashboard/CommandCenterTab').then(m => ({ default: m.CommandCenterTab })),
+const OperationsTab = dynamic(
+  () => import('@/components/dashboard/OperationsTab'),
   { loading: () => <TabSkeleton /> }
 );
-const TeamTab = dynamic(
-  () => import('@/components/dashboard/TeamTab'),
+const AgentIntelligenceTab = dynamic(
+  () => import('@/components/dashboard/AgentIntelligenceTab'),
   { loading: () => <TabSkeleton /> }
 );
-const AiAutomationTab = dynamic(
-  () => import('@/components/dashboard/AiAutomationTab'),
+const TierReadinessTab = dynamic(
+  () => import('@/components/dashboard/TierReadinessTab'),
   { loading: () => <TabSkeleton /> }
 );
-const ReportsTab = dynamic(
-  () => import('@/components/dashboard/ReportsTab'),
+const CostDataTab = dynamic(
+  () => import('@/components/dashboard/CostDataTab'),
   { loading: () => <TabSkeleton /> }
 );
-
-// --- Types matching API response shapes ---
-
-interface DashboardSummary {
-  system: { status: 'healthy' | 'degraded' | 'down'; lastPulse: string | null; queuedOps: number };
-  alerts: { slaBreaches: number; staleTickets: number; volumeSpike: { detected: boolean; multiplier: number; currentVolume: number; avgVolume: number } | null };
-  metrics: { openTickets: number; openDelta: number; responseP90Min: number; responseP90Delta: number; spamPct: number; spamDelta: number; unassignedPct: number; unassignedDelta: number; slaCompliancePct: number; slaDelta: number };
-  resolutionTrend: { date: string; p50: number; p90: number }[];
-  categoryBreakdown: { name: string; count: number }[];
-  ticketFlow: { open: number; assigned: number; closed: number; spam: number };
-  opsNotes: string[];
-  slaBreachTickets?: { id: number; subject: string; assignee: string; ageHours: number }[];
-  staleTicketsList?: { id: number; subject: string; assignee: string; ageHours: number }[];
-  categoryP90?: { category: string; p90Min: number; ticketCount: number }[];
-}
-
-interface TeamSummary {
-  leaderboard: { agent: string; score: number; totalActions: number; replies: number; closes: number; escalations: number; escalationRate: number; avgResponseMin: number | null; avgCsat: number | null; reopens: number }[];
-  workloadByDay: { date: string; agents: Record<string, number> }[];
-  recentActivity: { agent: string; action: string; ticketId: number; ticketSubject: string | null; occurredAt: string }[];
-  macroStats?: { macroName: string; usageCount: number; avgResolutionMin: number | null }[];
-}
-
-interface AiSummary {
-  kpis: { accuracy: number | null; judged: number; costPerTicket: number | null; totalLlmCost: number; totalSavedHours: number | null; savedPerTicketMin: number | null; totalCostSavings: number };
-  tierReadiness: { category: string; tier: string; accuracy: number; ticketCount: number; avgConfidence: number }[];
-  feedback: { overallAccuracy: number | null; recentCorrections: { ticketId: number; aiCategory: string; humanCategory: string; correctedAt: string }[]; matrix: { aiCategory: string; humanCategory: string; count: number }[] };
-  sentimentTrend: { date: string; angry: number; frustrated: number; happy: number; neutral: number }[];
-  costBreakdown?: { category: string; totalCost: number; requestCount: number }[];
-}
 
 // --- Typed fetch wrappers ---
 
-async function fetchSummary(): Promise<DashboardSummary> {
-  const res = await fetch('/api/dashboard/summary');
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function fetchTab(endpoint: string): Promise<any> {
+  const res = await fetch(endpoint);
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
 
-async function fetchTeam(): Promise<TeamSummary> {
-  const res = await fetch('/api/dashboard/team');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
+// Map old tab IDs to new ones for backward compatibility
+const TAB_REDIRECTS: Record<string, string> = {
+  'command-center': 'operations',
+  'team': 'agent-intelligence',
+  'ai-automation': 'tier-readiness',
+  'reports': 'cost-data',
+};
 
-async function fetchAi(): Promise<AiSummary> {
-  const res = await fetch('/api/dashboard/ai');
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
-}
+const TAB_ENDPOINTS: Record<string, string> = {
+  'operations': '/api/dashboard/operations',
+  'agent-intelligence': '/api/dashboard/agent-intelligence',
+  'tier-readiness': '/api/dashboard/tier-readiness',
+  'cost-data': '/api/dashboard/cost-data',
+};
 
 // --- Page ---
 
@@ -93,21 +68,21 @@ function Dashboard() {
   const searchParams = useSearchParams();
   const router = useRouter();
 
-  const initialTab = searchParams.get('tab') || 'command-center';
-  const [activeTab, setActiveTab] = useState(initialTab);
+  // Handle old tab IDs
+  const rawTab = searchParams.get('tab') || 'operations';
+  const resolvedTab = TAB_REDIRECTS[rawTab] ?? rawTab;
+  const [activeTab, setActiveTab] = useState(resolvedTab);
 
-  // Lazy-loaded data per tab — cached in state after first fetch
-  const [summaryData, setSummaryData] = useState<DashboardSummary | null>(null);
-  const [teamData, setTeamData] = useState<TeamSummary | null>(null);
-  const [aiData, setAiData] = useState<AiSummary | null>(null);
-
+  // Generic data cache per tab
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [tabData, setTabData] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState<Record<string, boolean>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   // URL sync
   const updateUrl = useCallback((tab: string) => {
     const params = new URLSearchParams();
-    if (tab !== 'command-center') params.set('tab', tab);
+    if (tab !== 'operations') params.set('tab', tab);
     const qs = params.toString();
     router.replace(qs ? `?${qs}` : '/', { scroll: false });
   }, [router]);
@@ -119,35 +94,27 @@ function Dashboard() {
 
   // Fetch data for a tab on first activation
   const fetchTabData = useCallback(async (tab: string) => {
-    if (loading[tab]) return;
+    if (loading[tab] || tabData[tab]) return;
 
-    // Skip if already loaded
-    if (tab === 'command-center' && summaryData) return;
-    if (tab === 'team' && teamData) return;
-    if (tab === 'ai-automation' && aiData) return;
-    if (tab === 'reports') return; // ReportsTab fetches its own data
+    const endpoint = TAB_ENDPOINTS[tab];
+    if (!endpoint) return;
 
     setLoading(prev => ({ ...prev, [tab]: true }));
     setErrors(prev => { const next = { ...prev }; delete next[tab]; return next; });
 
     try {
-      if (tab === 'command-center') {
-        setSummaryData(await fetchSummary());
-      } else if (tab === 'team') {
-        setTeamData(await fetchTeam());
-      } else if (tab === 'ai-automation') {
-        setAiData(await fetchAi());
-      }
+      const data = await fetchTab(endpoint);
+      setTabData(prev => ({ ...prev, [tab]: data }));
     } catch (err) {
       setErrors(prev => ({ ...prev, [tab]: err instanceof Error ? err.message : 'Failed to load' }));
     } finally {
       setLoading(prev => ({ ...prev, [tab]: false }));
     }
-  }, [loading, summaryData, teamData, aiData]);
+  }, [loading, tabData]);
 
-  // Fetch Command Center on mount (it's the default tab)
+  // Fetch default tab on mount
   useEffect(() => {
-    fetchTabData('command-center');
+    fetchTabData('operations');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -159,26 +126,28 @@ function Dashboard() {
 
   const isLoading = loading[activeTab];
   const error = errors[activeTab];
+  const opsData = tabData['operations'];
 
   return (
     <div className="min-h-screen bg-slate-50">
-      {/* Dark branded header — always visible */}
       <DashboardHeader
-        systemStatus={summaryData?.system.status ?? 'healthy'}
-        lastPulse={summaryData?.system.lastPulse ?? null}
-        queuedOps={summaryData?.system.queuedOps ?? 0}
+        systemStatus={opsData?.system?.status ?? 'healthy'}
+        lastPulse={opsData?.system?.lastPulse ?? null}
+        queuedOps={opsData?.system?.queuedOps ?? 0}
       />
 
       <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
-        {/* Tab navigation */}
         <Tabs activeTab={activeTab} onTabChange={handleTabChange} />
 
-        {/* Tab error banner */}
         {error && (
           <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-center justify-between">
             <span>Failed to load data: {error}</span>
             <button
-              onClick={() => { setErrors(prev => { const next = { ...prev }; delete next[activeTab]; return next; }); fetchTabData(activeTab); }}
+              onClick={() => {
+                setErrors(prev => { const next = { ...prev }; delete next[activeTab]; return next; });
+                setTabData(prev => { const next = { ...prev }; delete next[activeTab]; return next; });
+                fetchTabData(activeTab);
+              }}
               className="text-amber-700 font-medium hover:text-amber-900 transition-colors"
             >
               Retry
@@ -186,26 +155,32 @@ function Dashboard() {
           </div>
         )}
 
-        {/* Loading state */}
         {isLoading && <TabSkeleton />}
 
-        {/* Tab content */}
         {!isLoading && !error && (
           <>
-            {activeTab === 'command-center' && (
-              <CommandCenterTab data={summaryData} />
+            {activeTab === 'operations' && (
+              tabData['operations']
+                ? <OperationsTab data={tabData['operations']} />
+                : <EmptyState title="No Data Yet" description="Operations data will appear once the first pulse check completes." />
             )}
 
-            {activeTab === 'team' && (
-              <TeamTab data={teamData} />
+            {activeTab === 'agent-intelligence' && (
+              tabData['agent-intelligence']
+                ? <AgentIntelligenceTab data={tabData['agent-intelligence']} />
+                : <EmptyState title="No Agent Data" description="Agent intelligence data will appear once behavior logs start flowing." />
             )}
 
-            {activeTab === 'ai-automation' && (
-              <AiAutomationTab data={aiData} />
+            {activeTab === 'tier-readiness' && (
+              tabData['tier-readiness']
+                ? <TierReadinessTab data={tabData['tier-readiness']} />
+                : <EmptyState title="No Tier Data" description="Tier readiness data will appear once AI classification runs accumulate." />
             )}
 
-            {activeTab === 'reports' && (
-              <ReportsTab />
+            {activeTab === 'cost-data' && (
+              tabData['cost-data']
+                ? <CostDataTab data={tabData['cost-data']} />
+                : <EmptyState title="No Cost Data" description="Cost and data flow information will appear once token usage is tracked." />
             )}
           </>
         )}
