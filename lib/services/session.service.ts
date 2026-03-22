@@ -9,6 +9,7 @@ export async function startSession(opts: {
   slackUserId?: string;
   userMessage: string;
   model: string;
+  intent?: string;
 }) {
   const session = await createSession({
     slackChannel: opts.slackChannel,
