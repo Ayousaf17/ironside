@@ -170,7 +170,73 @@ export async function GET() {
     // --- opsNotes ---
     const opsNotes = (latest?.opsNotes as string[] | null) ?? [];
 
-    const summary: DashboardSummary = {
+    // --- Morning Brief ---
+    const briefParts: string[] = [];
+
+    // Queue state
+    briefParts.push(`${openTickets} open ticket${openTickets !== 1 ? "s" : ""}`);
+    if (metrics.unassignedPct > 50) {
+      briefParts[0] += ` (${Math.round(metrics.unassignedPct)}% unassigned — needs attention)`;
+    }
+
+    // SLA
+    if (slaBreaches > 0) {
+      briefParts.push(`${slaBreaches} SLA breach${slaBreaches !== 1 ? "es" : ""}`);
+    }
+
+    // Stale
+    if (staleTickets > 0) {
+      briefParts.push(`${staleTickets} stale ticket${staleTickets !== 1 ? "s" : ""} (no response >24h)`);
+    }
+
+    // Volume spike
+    if (volumeSpike?.detected) {
+      briefParts.push(`Volume spike: ${volumeSpike.multiplier}x normal`);
+    }
+
+    // P90
+    if (p90 > 0) {
+      briefParts.push(`P90 response: ${Math.round(p90)}min`);
+    }
+
+    // Spam
+    if (spam > 30) {
+      briefParts.push(`Spam rate high at ${Math.round(spam)}%`);
+    }
+
+    // Token cost (last 24h)
+    let dailyCostLine: string | null = null;
+    try {
+      const oneDayAgo = new Date(Date.now() - 86400000);
+      const dailyCost = await prisma.aiTokenUsage.aggregate({
+        where: { createdAt: { gte: oneDayAgo } },
+        _sum: { costUsd: true },
+      });
+      const cost = dailyCost._sum.costUsd ?? 0;
+      if (cost > 0) {
+        dailyCostLine = `$${cost.toFixed(2)} LLM spend yesterday`;
+      }
+    } catch { /* non-critical */ }
+    if (dailyCostLine) briefParts.push(dailyCostLine);
+
+    // Tier progress
+    let tierLine: string | null = null;
+    try {
+      const tierCounts = await prisma.ticketAnalytics.groupBy({
+        by: ["category"],
+        where: { aiMatchesHuman: { not: null } },
+        _count: true,
+      });
+      const totalCategories = tierCounts.length;
+      if (totalCategories > 0) {
+        tierLine = `${totalCategories} categories tracked for tier progression`;
+      }
+    } catch { /* non-critical */ }
+    if (tierLine) briefParts.push(tierLine);
+
+    const morningBrief = briefParts.join(". ") + ".";
+
+    const summary = {
       system,
       alerts,
       metrics,
@@ -181,6 +247,7 @@ export async function GET() {
       slaBreachTickets,
       staleTicketsList,
       categoryP90,
+      morningBrief,
     };
 
     return NextResponse.json(summary);
