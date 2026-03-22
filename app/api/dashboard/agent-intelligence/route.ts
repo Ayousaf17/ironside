@@ -50,6 +50,7 @@ export async function GET() {
           reopened: true,
           responseCharCount: true,
           isFirstResponse: true,
+          rawEvent: true,
         },
       }),
 
@@ -194,8 +195,12 @@ export async function GET() {
       }
       const a = agentMap.get(b.agent)!;
       a.actions++;
-      if (b.action === "reply" || b.action === "reply_ticket") a.replies++;
-      if (b.action === "close") a.closes++;
+      // Map Gorgias event types to logical actions:
+      // "message" = agent replied, "update" with "closed" in raw = close
+      if (b.action === "message" || b.action === "reply" || b.action === "reply_ticket") a.replies++;
+      const rawStr = typeof b.rawEvent === "string" ? b.rawEvent : JSON.stringify(b.rawEvent ?? "");
+      const isClose = b.action === "close" || (b.action === "update" && rawStr.includes("closed"));
+      if (isClose) a.closes++;
       if (b.action === "escalation") a.escalations++;
       if (b.timeToRespondMin != null) a.responseTimes.push(b.timeToRespondMin);
       if (b.csatScore != null) a.csatScores.push(b.csatScore);
