@@ -16,6 +16,11 @@ const AreaChart = dynamic(
   { ssr: false },
 );
 
+const BarList = dynamic(
+  () => import('@tremor/react').then((mod) => mod.BarList),
+  { ssr: false },
+);
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -53,6 +58,11 @@ export interface AiSummary {
     frustrated: number;
     happy: number;
     neutral: number;
+  }[];
+  costBreakdown?: {
+    category: string;
+    totalCost: number;
+    requestCount: number;
   }[];
 }
 
@@ -209,6 +219,7 @@ export default function AiAutomationTab({ data }: { data: AiSummary | null }) {
   }
 
   const { kpis, tierReadiness, feedback, sentimentTrend } = data;
+  const costBreakdown = data.costBreakdown ?? [];
   const topMatrix = feedback.matrix.slice(0, 5);
   const recentCorrections = feedback.recentCorrections.slice(0, 10);
 
@@ -341,6 +352,21 @@ export default function AiAutomationTab({ data }: { data: AiSummary | null }) {
           </div>
         </div>
       </section>
+
+      {/* ---- Cost Breakdown ---- */}
+      {costBreakdown.length > 0 && (
+        <section>
+          <ChartCard title="Cost Breakdown" subtitle="LLM spend by source and model (30 days)">
+            <BarList
+              data={costBreakdown.map((c) => ({
+                name: c.category,
+                value: c.totalCost,
+              }))}
+              valueFormatter={(v: number) => `$${v.toFixed(3)}`}
+            />
+          </ChartCard>
+        </section>
+      )}
 
       {/* ---- Sentiment Trend ---- */}
       {sentimentTrend.length > 0 && (

@@ -13,6 +13,11 @@ const BarChart = dynamic(
   { ssr: false },
 );
 
+const BarList = dynamic(
+  () => import("@tremor/react").then((m) => m.BarList),
+  { ssr: false },
+);
+
 /* ------------------------------------------------------------------ */
 /*  Types                                                             */
 /* ------------------------------------------------------------------ */
@@ -43,10 +48,17 @@ interface ActivityEntry {
   occurredAt: string;
 }
 
+interface MacroStat {
+  macroName: string;
+  usageCount: number;
+  avgResolutionMin: number | null;
+}
+
 export interface TeamSummary {
   leaderboard: LeaderboardEntry[];
   workloadByDay: WorkloadDay[];
   recentActivity: ActivityEntry[];
+  macroStats?: MacroStat[];
 }
 
 interface TeamTabProps {
@@ -137,6 +149,7 @@ export default function TeamTab({ data }: TeamTabProps) {
   }
 
   const { leaderboard, workloadByDay, recentActivity } = data;
+  const macroStats = data.macroStats ?? [];
 
   /* --- Workload chart data transformation --- */
   const agentNames = Array.from(
@@ -256,7 +269,21 @@ export default function TeamTab({ data }: TeamTabProps) {
         </ChartCard>
       </section>
 
-      {/* 3. Recent Activity */}
+      {/* 3. Macro Usage */}
+      {macroStats.length > 0 && (
+        <section>
+          <ChartCard title="Macro Usage" subtitle="Most used macros, last 30 days">
+            <BarList
+              data={macroStats.map((m) => ({
+                name: m.macroName,
+                value: m.usageCount,
+              }))}
+            />
+          </ChartCard>
+        </section>
+      )}
+
+      {/* 4. Recent Activity */}
       <section>
         <SectionHeader title="Recent Activity" />
         <div className="mt-4 max-h-80 overflow-y-auto rounded-xl border border-slate-200 bg-white shadow-sm divide-y divide-slate-50">

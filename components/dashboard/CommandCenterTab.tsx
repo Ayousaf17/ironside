@@ -1,11 +1,13 @@
 'use client';
 
+import { useState } from 'react';
 import dynamic from 'next/dynamic';
-import { Ticket, Clock, ShieldX, UserX, CheckCircle } from 'lucide-react';
+import { Ticket, Clock, ShieldX, UserX, CheckCircle, ChevronDown, ChevronUp, ExternalLink } from 'lucide-react';
 import { MetricCard } from '@/components/ui/metric-card';
 import { AlertBanner } from '@/components/ui/alert-banner';
 import { ChartCard } from '@/components/ui/chart-card';
 import { EmptyState } from '@/components/ui/empty-state';
+import { ErrorsPanel } from './ErrorsPanel';
 
 const AreaChart = dynamic(
   () => import('@tremor/react').then((m) => m.AreaChart),
@@ -26,6 +28,19 @@ interface VolumeSpike {
   multiplier: number;
   currentVolume: number;
   avgVolume: number;
+}
+
+interface TicketDetail {
+  id: number;
+  subject: string;
+  assignee: string;
+  ageHours: number;
+}
+
+interface CategoryP90 {
+  category: string;
+  p90Min: number;
+  ticketCount: number;
 }
 
 interface DashboardSummary {
@@ -55,6 +70,9 @@ interface DashboardSummary {
   categoryBreakdown: { name: string; count: number }[];
   ticketFlow: { open: number; assigned: number; closed: number; spam: number };
   opsNotes: string[];
+  slaBreachTickets?: TicketDetail[];
+  staleTicketsList?: TicketDetail[];
+  categoryP90?: CategoryP90[];
 }
 
 interface CommandCenterTabProps {
@@ -90,6 +108,71 @@ function buildAlerts(data: DashboardSummary) {
   }
 
   return alerts;
+}
+
+// ---------------------------------------------------------------------------
+// Expandable Ticket Detail
+// ---------------------------------------------------------------------------
+
+function ExpandableTicketList({
+  title,
+  count,
+  tickets,
+  variant,
+}: {
+  title: string;
+  count: number;
+  tickets: TicketDetail[];
+  variant: 'sla' | 'stale';
+}) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (count === 0) return null;
+
+  const colors = variant === 'sla'
+    ? 'bg-red-50 border-red-200 text-red-800'
+    : 'bg-orange-50 border-orange-200 text-orange-800';
+
+  return (
+    <div className={`rounded-xl border ${colors}`}>
+      <button
+        type="button"
+        onClick={() => setExpanded(!expanded)}
+        className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium"
+      >
+        <span>{count} {title}</span>
+        {tickets.length > 0 && (
+          expanded
+            ? <ChevronUp className="h-4 w-4" />
+            : <ChevronDown className="h-4 w-4" />
+        )}
+      </button>
+      {expanded && tickets.length > 0 && (
+        <div className="px-4 pb-3 space-y-1.5">
+          {tickets.map((t) => (
+            <div key={t.id} className="flex items-center justify-between text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-mono font-medium">#{t.id}</span>
+                <span className="truncate max-w-[200px]" title={t.subject}>{t.subject}</span>
+              </div>
+              <div className="flex items-center gap-3 shrink-0">
+                <span className="text-slate-500">{t.assignee}</span>
+                <span className="font-mono">{t.ageHours}h</span>
+                <a
+                  href={`https://ironsidecomputers.gorgias.com/app/tickets/${t.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:opacity-70"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -161,11 +244,26 @@ export function CommandCenterTab({ data }: CommandCenterTabProps) {
 
   const alerts = buildAlerts(data);
   const { metrics, resolutionTrend, categoryBreakdown, ticketFlow, opsNotes } = data;
+  const slaBreachTickets = data.slaBreachTickets ?? [];
+  const staleTicketsList = data.staleTicketsList ?? [];
+  const categoryP90 = data.categoryP90 ?? [];
 
   return (
     <div className="space-y-6">
-      {/* 1. Alert Banner */}
+      {/* 1. Alert Banner + Expandable Details */}
       {alerts.length > 0 && <AlertBanner alerts={alerts} />}
+      <ExpandableTicketList
+        title="SLA breaches"
+        count={data.alerts.slaBreaches}
+        tickets={slaBreachTickets}
+        variant="sla"
+      />
+      <ExpandableTicketList
+        title="stale tickets (no response >24h)"
+        count={data.alerts.staleTickets}
+        tickets={staleTicketsList}
+        variant="stale"
+      />
 
       {/* 2. Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -229,6 +327,15 @@ export function CommandCenterTab({ data }: CommandCenterTabProps) {
         </ChartCard>
       </div>
 
+      {/* 3b. Category P90 Response Times */}
+      {categoryP90.length > 0 && (
+        <ChartCard title="Response P90 by Category" subtitle="Minutes to first response (90th percentile)">
+          <BarList
+            data={categoryP90.map((c) => ({ name: c.category, value: c.p90Min }))}
+          />
+        </ChartCard>
+      )}
+
       {/* 4. Ticket Flow */}
       <TicketFlowBar flow={ticketFlow} />
 
@@ -245,6 +352,9 @@ export function CommandCenterTab({ data }: CommandCenterTabProps) {
           </ul>
         </details>
       )}
+
+      {/* 6. Errors Panel */}
+      <ErrorsPanel />
     </div>
   );
 }

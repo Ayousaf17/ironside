@@ -8,7 +8,7 @@ export async function GET() {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
     const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000);
 
-    const [leaderboardRows, workloadRows, recentRows] = await Promise.all([
+    const [leaderboardRows, workloadRows, recentRows, macroRows] = await Promise.all([
       // Leaderboard: last 30 days of behavior logs
       prisma.agentBehaviorLog.findMany({
         where: { occurredAt: { gte: thirtyDaysAgo } },
@@ -38,6 +38,18 @@ export async function GET() {
           ticketId: true,
           ticketSubject: true,
           occurredAt: true,
+        },
+      }),
+      // Macro usage: last 30 days where macro was used
+      prisma.agentBehaviorLog.findMany({
+        where: {
+          occurredAt: { gte: thirtyDaysAgo },
+          macroIdUsed: { not: null },
+          macroName: { not: null },
+        },
+        select: {
+          macroName: true,
+          timeToRespondMin: true,
         },
       }),
     ]);
@@ -148,7 +160,33 @@ export async function GET() {
       occurredAt: r.occurredAt.toISOString(),
     }));
 
-    return NextResponse.json({ leaderboard, workloadByDay, recentActivity });
+    // 4. Macro stats
+    const macroMap = new Map<string, { usageCount: number; responseTimes: number[] }>();
+    for (const row of macroRows) {
+      if (!row.macroName) continue;
+      if (!macroMap.has(row.macroName)) {
+        macroMap.set(row.macroName, { usageCount: 0, responseTimes: [] });
+      }
+      const m = macroMap.get(row.macroName)!;
+      m.usageCount++;
+      if (row.timeToRespondMin != null) m.responseTimes.push(row.timeToRespondMin);
+    }
+
+    const macroStats = Array.from(macroMap.entries())
+      .map(([macroName, data]) => ({
+        macroName,
+        usageCount: data.usageCount,
+        avgResolutionMin:
+          data.responseTimes.length > 0
+            ? Math.round(
+                (data.responseTimes.reduce((s, v) => s + v, 0) / data.responseTimes.length) * 10
+              ) / 10
+            : null,
+      }))
+      .sort((a, b) => b.usageCount - a.usageCount)
+      .slice(0, 10);
+
+    return NextResponse.json({ leaderboard, workloadByDay, recentActivity, macroStats });
   } catch (error) {
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error";

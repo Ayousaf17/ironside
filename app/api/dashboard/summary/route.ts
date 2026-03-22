@@ -13,6 +13,19 @@ interface VolumeSpike {
   avgVolume: number;
 }
 
+interface TicketDetail {
+  id: number;
+  subject: string;
+  assignee: string;
+  ageHours: number;
+}
+
+interface CategoryP90 {
+  category: string;
+  p90Min: number;
+  ticketCount: number;
+}
+
 interface DashboardSummary {
   system: {
     status: "healthy" | "degraded" | "down";
@@ -40,6 +53,9 @@ interface DashboardSummary {
   categoryBreakdown: { name: string; count: number }[];
   ticketFlow: { open: number; assigned: number; closed: number; spam: number };
   opsNotes: string[];
+  slaBreachTickets: TicketDetail[];
+  staleTicketsList: TicketDetail[];
+  categoryP90: CategoryP90[];
 }
 
 // --- Helpers ---
@@ -56,8 +72,8 @@ function isAutoClose(tags: string[]): boolean {
 
 export async function GET() {
   try {
-    // 1. Parallel: fetch pulse data, queued ops, and open tickets from Gorgias
-    const [pulseRows, queueConfig, gorgiasResult] = await Promise.all([
+    // 1. Parallel: fetch pulse data, queued ops, open tickets, and category P90
+    const [pulseRows, queueConfig, gorgiasResult, categoryP90] = await Promise.all([
       prisma.pulseCheck.findMany({
         orderBy: { createdAt: "desc" },
         take: 30, // enough for trend + spike detection
@@ -66,6 +82,7 @@ export async function GET() {
         where: { key: "gorgias_offline_queue" },
       }),
       fetchOpenTickets(),
+      fetchCategoryP90(),
     ]);
 
     const latest = pulseRows[0] ?? null;
@@ -79,7 +96,7 @@ export async function GET() {
     };
 
     // --- alerts ---
-    const { slaBreaches, staleTickets } = gorgiasResult;
+    const { slaBreaches, staleTickets, slaBreachTickets, staleTicketsList } = gorgiasResult;
 
     const volumeSpike = computeVolumeSpike(pulseRows);
 
@@ -161,6 +178,9 @@ export async function GET() {
       categoryBreakdown,
       ticketFlow,
       opsNotes,
+      slaBreachTickets,
+      staleTicketsList,
+      categoryP90,
     };
 
     return NextResponse.json(summary);
@@ -181,6 +201,8 @@ export async function GET() {
 async function fetchOpenTickets(): Promise<{
   slaBreaches: number;
   staleTickets: number;
+  slaBreachTickets: TicketDetail[];
+  staleTicketsList: TicketDetail[];
 }> {
   try {
     const tickets = await Promise.race([
@@ -193,21 +215,79 @@ async function fetchOpenTickets(): Promise<{
 
     let slaBreaches = 0;
     let staleTickets = 0;
+    const slaBreachTickets: TicketDetail[] = [];
+    const staleTicketsList: TicketDetail[] = [];
 
     for (const ticket of tickets) {
       if (isAutoClose(ticket.tags)) continue;
       const ageMs = now - new Date(ticket.created_datetime).getTime();
-      if (ageMs / 60_000 > SLA_THRESHOLD_MIN) slaBreaches++;
-      if (ageMs > STALE_THRESHOLD_MS) staleTickets++;
+      const ageHours = Math.round(ageMs / 3_600_000 * 10) / 10;
+
+      if (ageMs / 60_000 > SLA_THRESHOLD_MIN) {
+        slaBreaches++;
+        if (slaBreachTickets.length < 10) {
+          slaBreachTickets.push({
+            id: ticket.id,
+            subject: ticket.subject,
+            assignee: ticket.assignee ?? "Unassigned",
+            ageHours,
+          });
+        }
+      }
+      if (ageMs > STALE_THRESHOLD_MS) {
+        staleTickets++;
+        if (staleTicketsList.length < 10) {
+          staleTicketsList.push({
+            id: ticket.id,
+            subject: ticket.subject,
+            assignee: ticket.assignee ?? "Unassigned",
+            ageHours,
+          });
+        }
+      }
     }
 
-    return { slaBreaches, staleTickets };
+    return { slaBreaches, staleTickets, slaBreachTickets, staleTicketsList };
   } catch (err) {
     console.warn(
       "[dashboard/summary] Gorgias unavailable, SLA/stale defaulting to 0:",
       err instanceof Error ? err.message : String(err)
     );
-    return { slaBreaches: 0, staleTickets: 0 };
+    return { slaBreaches: 0, staleTickets: 0, slaBreachTickets: [], staleTicketsList: [] };
+  }
+}
+
+/** Compute P90 response time per category from AgentBehaviorLog. */
+async function fetchCategoryP90(): Promise<CategoryP90[]> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000);
+    const rows = await prisma.agentBehaviorLog.findMany({
+      where: {
+        occurredAt: { gte: thirtyDaysAgo },
+        category: { not: null },
+        timeToRespondMin: { not: null },
+      },
+      select: { category: true, timeToRespondMin: true },
+    });
+
+    const byCategory = new Map<string, number[]>();
+    for (const row of rows) {
+      if (!row.category || row.timeToRespondMin == null) continue;
+      if (!byCategory.has(row.category)) byCategory.set(row.category, []);
+      byCategory.get(row.category)!.push(row.timeToRespondMin);
+    }
+
+    return Array.from(byCategory.entries())
+      .map(([category, times]) => {
+        const sorted = times.sort((a, b) => a - b);
+        const p90Index = Math.floor(sorted.length * 0.9);
+        const p90Min = Math.round(sorted[Math.min(p90Index, sorted.length - 1)] * 10) / 10;
+        return { category, p90Min, ticketCount: sorted.length };
+      })
+      .sort((a, b) => b.p90Min - a.p90Min)
+      .slice(0, 10);
+  } catch {
+    return [];
   }
 }
 

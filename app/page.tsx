@@ -35,12 +35,16 @@ interface DashboardSummary {
   categoryBreakdown: { name: string; count: number }[];
   ticketFlow: { open: number; assigned: number; closed: number; spam: number };
   opsNotes: string[];
+  slaBreachTickets?: { id: number; subject: string; assignee: string; ageHours: number }[];
+  staleTicketsList?: { id: number; subject: string; assignee: string; ageHours: number }[];
+  categoryP90?: { category: string; p90Min: number; ticketCount: number }[];
 }
 
 interface TeamSummary {
   leaderboard: { agent: string; score: number; totalActions: number; replies: number; closes: number; escalations: number; escalationRate: number; avgResponseMin: number | null; avgCsat: number | null; reopens: number }[];
   workloadByDay: { date: string; agents: Record<string, number> }[];
   recentActivity: { agent: string; action: string; ticketId: number; ticketSubject: string | null; occurredAt: string }[];
+  macroStats?: { macroName: string; usageCount: number; avgResolutionMin: number | null }[];
 }
 
 interface AiSummary {
@@ -48,6 +52,7 @@ interface AiSummary {
   tierReadiness: { category: string; tier: string; accuracy: number; ticketCount: number; avgConfidence: number }[];
   feedback: { overallAccuracy: number | null; recentCorrections: { ticketId: number; aiCategory: string; humanCategory: string; correctedAt: string }[]; matrix: { aiCategory: string; humanCategory: string; count: number }[] };
   sentimentTrend: { date: string; angry: number; frustrated: number; happy: number; neutral: number }[];
+  costBreakdown?: { category: string; totalCost: number; requestCount: number }[];
 }
 
 // --- Typed fetch wrappers ---
