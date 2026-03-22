@@ -15,8 +15,8 @@ const SLA_TARGETS_MIN: Record<string, number> = {
   low: 480,
 };
 
-function inferPriority(ticket: { tags: string[]; subject: string }): string {
-  const combined = `${ticket.subject} ${ticket.tags.join(" ")}`.toLowerCase();
+function inferPriority(ticket: { tags?: string[]; subject: string }): string {
+  const combined = `${ticket.subject} ${(ticket.tags ?? []).join(" ")}`.toLowerCase();
   if (/urgent|critical|water.*cool|doa|no.*power|leak/i.test(combined)) return "critical";
   if (/wrong.*item|damaged|verification.*stuck/i.test(combined)) return "high";
   return "normal";
@@ -59,13 +59,13 @@ export async function GET(request: Request) {
     }[] = [];
 
     for (const ticket of openTickets) {
-      if (ticket.tags.some((t) => t === "auto-close" || t === "non-support-related")) continue;
+      if ((ticket.tags ?? []).some((t) => t === "auto-close" || t === "non-support-related")) continue;
 
       const ageHours = Math.round(
         (Date.now() - new Date(ticket.created_datetime).getTime()) / 3600000
       );
-      const messages = ticket.messages || [];
-      const combined = `${ticket.subject} ${messages.map((m) => m.body_text).join(" ")}`;
+      const messages = ticket.messages ?? [];
+      const combined = `${ticket.subject} ${messages.map((m) => m.body_text ?? "").join(" ")}`;
       const customerMsg = messages.find((m) => m.from_agent === false || m.sender?.type === "customer");
       const customerName = customerMsg?.sender.name || "Unknown";
       const hasResponse = messages.some((m) => m.from_agent === true || m.sender?.type === "agent");
@@ -110,7 +110,7 @@ export async function GET(request: Request) {
           (ageHours >= ESCALATION_THRESHOLDS.ageHoursOpen);
 
         if (needsEscalation) {
-          const category = ticket.tags
+          const category = (ticket.tags ?? [])
             .map((t) => t.toLowerCase().replace(/-/g, "_"))
             .find((t) => ["track_order", "report_issue", "return_exchange", "order_verification", "product_question"].includes(t))
             ?? "other";
@@ -139,7 +139,7 @@ export async function GET(request: Request) {
     // SLA breach detection — alert on tickets past their first response SLA
     const slaBreaches: { ticketId: number; subject: string; priority: string; slaMin: number; ageMin: number; assignee: string | null }[] = [];
     for (const ticket of openTickets) {
-      if (ticket.tags.some((t) => t === "auto-close" || t === "non-support-related")) continue;
+      if ((ticket.tags ?? []).some((t) => t === "auto-close" || t === "non-support-related")) continue;
       const messages = ticket.messages || [];
       const hasResponse = messages.some((m) => m.from_agent === true || m.sender?.type === "agent");
       if (hasResponse) continue;

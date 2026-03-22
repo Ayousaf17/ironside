@@ -82,7 +82,7 @@ export async function GET() {
       }
       const a = agentMap.get(b.agent)!;
       a.actions++;
-      if (b.action === "reply" || b.action === "reply_ticket") a.replies++;
+      if (b.action === "message" || b.action === "reply" || b.action === "reply_ticket") a.replies++;
       if (b.action === "close") a.closes++;
       if (b.action === "escalation") a.escalations++;
       if (b.timeToRespondMin != null) a.responseTimes.push(b.timeToRespondMin);

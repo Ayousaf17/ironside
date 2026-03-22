@@ -43,15 +43,23 @@ export async function GET(request: Request) {
     let synced = 0;
 
     for (const user of users) {
-      await upsertGorgiasUser({
-        gorgiasId: user.id,
-        email: user.email,
-        firstName: user.firstname || user.first_name,
-        lastName: user.lastname || user.last_name,
-        role: typeof user.role === "object" ? user.role?.name : user.role,
-        isActive: user.deactivated_datetime === null,
-      });
-      synced++;
+      // Skip bot users and users with non-standard emails
+      if (!user.email || !user.email.includes("@") || user.email.startsWith("bot@")) {
+        continue;
+      }
+      try {
+        await upsertGorgiasUser({
+          gorgiasId: user.id,
+          email: user.email,
+          firstName: user.firstname || user.first_name,
+          lastName: user.lastname || user.last_name,
+          role: typeof user.role === "object" ? user.role?.name : user.role,
+          isActive: user.deactivated_datetime === null,
+        });
+        synced++;
+      } catch (err) {
+        console.warn(`[cron/sync-gorgias-users] Skipping user ${user.id}:`, err instanceof Error ? err.message : String(err));
+      }
     }
 
     console.log(`[cron/sync-gorgias-users] Synced ${synced} users`);
